@@ -2,10 +2,11 @@
 
 import { cn } from "@/lib/utils";
 import { HORARIOS_DISPONIVEIS } from "@/lib/quadras";
-import { saoConsecutivos } from "@/lib/constants";
+import { saoConsecutivos, isHorarioExpirado } from "@/lib/constants";
 import { toast } from "sonner";
 
 interface Props {
+  dataSelecionada: string;
   horariosSelecionados: string[]; // slots selecionados NESTA quadra
   horariosOcupados: string[];     // slots já reservados (persistidos)
   onToggleHorario: (horario: string) => void;
@@ -34,12 +35,14 @@ function getFaixa(hora: number): "MANHA" | "TARDE" | "NOITE" {
 // ─── Componente ───────────────────────────────────────────────────────────────
 
 export function HorarioGrid({
+  dataSelecionada,
   horariosSelecionados,
   horariosOcupados,
   onToggleHorario,
 }: Props) {
   const handleClick = (horario: string) => {
     if (horariosOcupados.includes(horario)) return;
+    if (isHorarioExpirado(dataSelecionada, horario, 10)) return;
 
     const isSelecionado = horariosSelecionados.includes(horario);
     if (!isSelecionado) {
@@ -89,22 +92,26 @@ export function HorarioGrid({
               const hora = parseInt(horario.split(":")[0], 10);
               const isSelecionado = horariosSelecionados.includes(horario);
               const isOcupado = horariosOcupados.includes(horario);
+              const expiradoParaSelecao = isHorarioExpirado(dataSelecionada, horario, 10);
+              const isDisabled = isOcupado || expiradoParaSelecao;
 
               return (
                 <button
                   key={horario}
                   onClick={() => handleClick(horario)}
-                  disabled={isOcupado}
+                  disabled={isDisabled}
                   title={
                     isOcupado
                       ? "Horário ocupado"
+                      : expiradoParaSelecao
+                      ? "Horário indisponível"
                       : `${horario} – ${String(hora + 1).padStart(2, "0")}:00`
                   }
                   className={cn(
                     "px-3 py-1.5 rounded-xl border text-xs font-semibold transition-all duration-150 select-none",
                     isSelecionado
                       ? "bg-emerald-500/25 border-emerald-500 text-emerald-300 shadow-sm"
-                      : isOcupado
+                      : isDisabled
                       ? "bg-slate-900/40 border-slate-800 text-slate-700 cursor-not-allowed line-through"
                       : "bg-slate-800/50 border-slate-700 text-slate-300 hover:bg-slate-700 hover:border-slate-600 active:scale-95"
                   )}

@@ -6,6 +6,7 @@ import { HorarioGrid } from "./HorarioGrid";
 
 interface Props {
   quadra: Quadra;
+  dataSelecionada: string;
   horariosSelecionados: string[];
   horariosOcupados: string[];
   isAtiva: boolean; // esta quadra está com seleção ativa?
@@ -14,6 +15,7 @@ interface Props {
 
 export function QuadraHorarioItem({
   quadra,
+  dataSelecionada,
   horariosSelecionados,
   horariosOcupados,
   isAtiva,
@@ -47,6 +49,7 @@ export function QuadraHorarioItem({
       </div>
 
       <HorarioGrid
+        dataSelecionada={dataSelecionada}
         horariosSelecionados={horariosSelecionados}
         horariosOcupados={horariosOcupados}
         onToggleHorario={(horario) => onToggleHorario(horario, quadra.id)}

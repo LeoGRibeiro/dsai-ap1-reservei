@@ -124,3 +124,24 @@ export function mascaraCPF(valor: string): string {
     return `${nums.slice(0, 3)}.${nums.slice(3, 6)}.${nums.slice(6)}`;
   return `${nums.slice(0, 3)}.${nums.slice(3, 6)}.${nums.slice(6, 9)}-${nums.slice(9)}`;
 }
+
+/** 
+ * Verifica se um horário de uma data específica expirou.
+ * @param dataSelecionada Formato "YYYY-MM-DD"
+ * @param horario Formato "HH:mm"
+ * @param minutosAntecedencia Limite de minutos antes do horário para considerar expirado
+ */
+export function isHorarioExpirado(
+  dataSelecionada: string,
+  horario: string,
+  minutosAntecedencia: number
+): boolean {
+  const agora = new Date();
+  const [ano, mes, dia] = dataSelecionada.split("-").map(Number);
+  const [hora, minuto] = horario.split(":").map(Number);
+  
+  const dataHorario = new Date(ano, mes - 1, dia, hora, minuto, 0, 0);
+  const tempoLimite = new Date(dataHorario.getTime() - minutosAntecedencia * 60000);
+  
+  return agora > tempoLimite;
+}

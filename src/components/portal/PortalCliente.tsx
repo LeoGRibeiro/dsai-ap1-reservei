@@ -18,6 +18,7 @@ import {
   calcularValorSinal,
   calcularValorPendente,
   saoConsecutivos,
+  isHorarioExpirado,
 } from "@/lib/constants";
 import { QUADRAS } from "@/lib/quadras";
 
@@ -102,9 +103,19 @@ export function PortalCliente() {
     setQuadraSelecionada(null);
   }, []);
 
-  /** Lock temporário + abertura do formulário */
   const handleContinuar = useCallback(() => {
     if (!quadraSelecionada || horariosSelecionados.length === 0) return;
+
+    for (const h of horariosSelecionados) {
+      if (isHorarioExpirado(dataSelecionada, h, 10)) {
+        toast.error("Horário expirado", {
+          description: "O horário escolhido já passou ou está muito próximo (menos de 10 min). Por favor, escolha outro.",
+        });
+        // Remove os horários inválidos ou limpa tudo (aqui estamos só bloqueando)
+        return;
+      }
+    }
+
     const id = criarReservaEmProcessamento({
       quadraId: quadraSelecionada,
       data: dataSelecionada,
@@ -144,6 +155,18 @@ export function PortalCliente() {
   const handleSimularPagamento = useCallback(
     (tipo: "sinal" | "integral") => {
       if (!reservaIdAtual) return;
+
+      // Validação de 1 minuto antes do início do primeiro horário
+      if (horariosSelecionados.length > 0) {
+        const primeiroHorario = [...horariosSelecionados].sort()[0];
+        if (isHorarioExpirado(dataSelecionada, primeiroHorario, 1)) {
+           toast.error("Tempo esgotado para pagamento", {
+             description: "O pagamento deve ser feito até 1 minuto antes do início do horário.",
+           });
+           return;
+        }
+      }
+
       confirmarPagamento(reservaIdAtual, tipo);
 
       // Reseta estado local
@@ -248,6 +271,7 @@ export function PortalCliente() {
                 <QuadraHorarioItem
                   key={quadra.id}
                   quadra={quadra}
+                  dataSelecionada={dataSelecionada}
                   horariosSelecionados={isAtiva ? horariosSelecionados : []}
                   horariosOcupados={horariosOcupados}
                   isAtiva={isAtiva}
