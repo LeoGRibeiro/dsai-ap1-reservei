@@ -11,6 +11,7 @@ import { useAdminAuth } from "@/hooks/useAdminAuth";
 import { AdminLogin } from "./AdminLogin";
 import { AdminSidebar, type AdminView } from "./AdminSidebar";
 import { AdminDashboardPage } from "./AdminDashboardPage";
+import { AdminAgendaPage } from "./AdminAgendaPage";
 
 // Placeholder pages para futuras specs
 function PlaceholderPage({ titulo }: { titulo: string }) {
@@ -73,9 +74,7 @@ export function AdminShell({ initialView = "dashboard" }: Props) {
       <main className="flex-1 min-w-0 lg:pt-0 pt-[57px]">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {view === "dashboard" && <AdminDashboardPage />}
-          {view === "agenda" && (
-            <PlaceholderPage titulo="Agenda de Ocupação" />
-          )}
+          {view === "agenda" && <AdminAgendaPage />}
           {view === "financeiro" && (
             <PlaceholderPage titulo="Financeiro" />
           )}

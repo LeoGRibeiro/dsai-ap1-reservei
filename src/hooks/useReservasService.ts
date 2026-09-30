@@ -150,7 +150,9 @@ export function useReservasService() {
       if (!reserva) return;
 
       const atualizacao: Partial<Reserva> = {
-        status: "pendente", // Ainda precisa comparecer
+        // sinal: ainda precisa comparecer para pagar o restante → "pendente"
+        // integral: pagamento completo, sem pendência no local → "confirmada"
+        status: tipoPagamento === "integral" ? "confirmada" : "pendente",
         statusWhatsApp: "enviado",
       };
 

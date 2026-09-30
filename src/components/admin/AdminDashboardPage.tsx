@@ -276,7 +276,9 @@ function ReservasDoDia({
                 </p>
                 <p className="text-slate-500 text-xs mt-0.5">
                   {r.esporte ?? "Sem esporte"} ·{" "}
-                  {formatarMoeda(r.valorSinal)} sinal
+                  {r.valorPendente === 0
+                    ? `${formatarMoeda(r.valorSinal)} integral`
+                    : `${formatarMoeda(r.valorSinal)} sinal`}
                 </p>
               </div>
 
