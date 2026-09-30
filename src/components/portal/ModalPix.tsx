@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -67,6 +68,45 @@ function FakeQrCode() {
   );
 }
 
+// ── Timer regressivo ──────────────────────────────────────────────────────────
+// O Banco Central não define prazo padrão para Pix imediato — cada emissor escolhe.
+// Mercado tipicamente usa 5–15 min; adotamos 10 min como padrão de checkout.
+
+const TEMPO_LIMITE_SEGUNDOS = 10 * 60;
+
+function formatarTempo(segundos: number): string {
+  const m = Math.floor(segundos / 60).toString().padStart(2, "0");
+  const s = (segundos % 60).toString().padStart(2, "0");
+  return `${m}:${s}`;
+}
+
+function useContagemRegressiva(ativo: boolean, onExpirar: () => void) {
+  const [segundos, setSegundos] = useState(TEMPO_LIMITE_SEGUNDOS);
+
+  useEffect(() => {
+    if (!ativo) {
+      setSegundos(TEMPO_LIMITE_SEGUNDOS); // reseta ao fechar o modal
+      return;
+    }
+
+    const intervalo = setInterval(() => {
+      setSegundos((prev) => {
+        if (prev <= 1) {
+          clearInterval(intervalo);
+          onExpirar();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(intervalo);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ativo]);
+
+  return segundos;
+}
+
 // ── Modal ─────────────────────────────────────────────────────────────────────
 
 interface Props {
@@ -92,6 +132,9 @@ export function ModalPix({
 }: Props) {
   const valorCobrado = tipoPagamento === "sinal" ? valorSinal : valorTotal;
   const valorRestante = valorTotal - valorSinal;
+
+  const segundosRestantes = useContagemRegressiva(open, onCancelar);
+  const estaQuaseExpirando = segundosRestantes <= 60;
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onCancelar()}>
@@ -139,10 +182,25 @@ export function ModalPix({
             <FakeQrCode />
           </div>
 
-          <div className="text-center space-y-1">
+          {/* Chave Pix + Timer discreto */}
+          <div className="text-center space-y-1.5">
             <p className="text-xs text-slate-400">
-              Chave Pix: <span className="text-white font-mono font-semibold">reservei@complexo.com</span>
+              Chave Pix:{" "}
+              <span className="text-white font-mono font-semibold">reservei@complexo.com</span>
             </p>
+
+            {/* Timer — apenas texto pequeno. Muda para âmbar nos últimos 60s */}
+            <p
+              className={`text-xs tabular-nums transition-colors duration-700 ${
+                estaQuaseExpirando ? "text-amber-400" : "text-slate-500"
+              }`}
+            >
+              ⏱ QR Code expira em{" "}
+              <span className="font-semibold tracking-wide">
+                {formatarTempo(segundosRestantes)}
+              </span>
+            </p>
+
             <p className="text-[11px] text-slate-500">
               Após o pagamento, a confirmação será enviada via WhatsApp.
             </p>
