@@ -87,6 +87,17 @@ export function saoConsecutivos(horarios: string[]): boolean {
   return true;
 }
 
+/**
+ * Formata um objeto Date para "YYYY-MM-DD" usando o fuso horário LOCAL.
+ * ⚠️ Nunca use toISOString() para isso — ela retorna UTC e quebra em deploy.
+ */
+function formatarDataLocal(d: Date): string {
+  const ano = d.getFullYear();
+  const mes = String(d.getMonth() + 1).padStart(2, "0");
+  const dia = String(d.getDate()).padStart(2, "0");
+  return `${ano}-${mes}-${dia}`;
+}
+
 /** Gera os próximos N dias (hoje inclusive) no formato "YYYY-MM-DD" */
 export function gerarDiasDisponiveis(
   total: number = DIAS_AGENDAMENTO_FUTURO + 1
@@ -97,14 +108,14 @@ export function gerarDiasDisponiveis(
   for (let i = 0; i < total; i++) {
     const d = new Date(today);
     d.setDate(today.getDate() + i);
-    result.push(d.toISOString().split("T")[0]);
+    result.push(formatarDataLocal(d)); // ✅ fuso horário local
   }
   return result;
 }
 
-/** Retorna a data de hoje no formato "YYYY-MM-DD" */
+/** Retorna a data de hoje no formato "YYYY-MM-DD" (fuso horário local) */
 export function getHoje(): string {
-  return new Date().toISOString().split("T")[0];
+  return formatarDataLocal(new Date()); // ✅ fuso horário local, não UTC
 }
 
 /** Mascara WhatsApp: (00) 00000-0000 */
