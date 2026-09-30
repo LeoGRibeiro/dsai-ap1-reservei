@@ -1,73 +1,72 @@
 /**
- * Dados fixos das quadras esportivas do complexo.
- * Servem como "tabela de quadras" do banco de dados simulado.
+ * Dados do complexo esportivo — um único estabelecimento com múltiplas quadras idênticas.
+ * Todas as quadras têm o mesmo piso (PU) e as mesmas comodidades.
  */
+
+// ─── Esportes disponíveis ─────────────────────────────────────────────────────
+
+/**
+ * Esporte que será praticado na reserva (campo opcional).
+ * Quando informado, a administração prepara a quadra adequadamente
+ * (ex.: instalar rede de vôlei, posicionar traves de futsal, etc.).
+ */
+export type Esporte =
+  | "Futsal"
+  | "Vôlei"
+  | "Basquete"
+  | "Handebol"
+  | "Outro";
+
+export const ESPORTES: Esporte[] = [
+  "Futsal",
+  "Vôlei",
+  "Basquete",
+  "Handebol",
+  "Outro",
+];
+
+/** Equipamentos que a administração monta por esporte */
+export const PREPARACAO_POR_ESPORTE: Record<Esporte, string> = {
+  Futsal: "Posicionamento e fixação das traves de futsal",
+  Vôlei: "Montagem da rede e marcação das linhas de vôlei",
+  Basquete: "Posicionamento das tabelas de basquete",
+  Handebol: "Posicionamento das traves de handebol",
+  Outro: "Preparação padrão (sem equipamento específico)",
+};
+
+// ─── Quadras ──────────────────────────────────────────────────────────────────
 
 export interface Quadra {
   id: string;
-  nome: string;
-  tipo: "Society" | "Futsal" | "Beach Tennis" | "Basquete" | "Vôlei";
+  numero: number;        // "Quadra 1", "Quadra 2", etc.
   descricao: string;
-  capacidade: number;       // número de jogadores
-  valorHora: number;        // em reais
-  imagemUrl: string;
-  comodidades: string[];
 }
 
-export const QUADRAS: Quadra[] = [
-  {
-    id: "q1",
-    nome: "Quadra Society 1",
-    tipo: "Society",
-    descricao: "Campo society gramado sintético de última geração, ideal para peladas com amigos.",
-    capacidade: 14,
-    valorHora: 120,
-    imagemUrl: "/images/quadra-society.jpg",
-    comodidades: ["Vestiário", "Iluminação noturna", "Estacionamento"],
-  },
-  {
-    id: "q2",
-    nome: "Quadra Futsal Arena",
-    tipo: "Futsal",
-    descricao: "Quadra de futsal com piso emborrachado profissional e arquibancada coberta.",
-    capacidade: 10,
-    valorHora: 90,
-    imagemUrl: "/images/quadra-futsal.jpg",
-    comodidades: ["Vestiário", "Iluminação noturna", "Placar eletrônico"],
-  },
-  {
-    id: "q3",
-    nome: "Beach Tennis Court",
-    tipo: "Beach Tennis",
-    descricao: "Arena de areia natural importada para beach tennis e beach vôlei.",
-    capacidade: 4,
-    valorHora: 70,
-    imagemUrl: "/images/quadra-beach.jpg",
-    comodidades: ["Ducha externa", "Iluminação noturna", "Aluguel de raquetes"],
-  },
-  {
-    id: "q4",
-    nome: "Quadra Basquete",
-    tipo: "Basquete",
-    descricao: "Quadra de basquete com piso poliesportivo e tabelas regulamentares.",
-    capacidade: 10,
-    valorHora: 80,
-    imagemUrl: "/images/quadra-basquete.jpg",
-    comodidades: ["Vestiário", "Estacionamento"],
-  },
-  {
-    id: "q5",
-    nome: "Quadra Vôlei Coberta",
-    tipo: "Vôlei",
-    descricao: "Ginásio poliesportivo coberto para vôlei com piso de madeira tratada.",
-    capacidade: 12,
-    valorHora: 85,
-    imagemUrl: "/images/quadra-volei.jpg",
-    comodidades: ["Vestiário", "Ar-condicionado", "Placar eletrônico"],
-  },
+/**
+ * Comodidades comuns a todas as quadras do complexo.
+ * Piso de pintura PU — todas idênticas.
+ */
+export const COMODIDADES_COMPLEXO: string[] = [
+  "Piso PU (pintura poliuretânica)",
+  "Vestiário masculino e feminino",
+  "Iluminação LED noturna",
+  "Estacionamento gratuito",
+  "Bebedouro",
 ];
 
-/** Horários disponíveis para agendamento (intervalos de 1h) */
+/** Quadras do complexo — altere a quantidade conforme o estabelecimento */
+export const QUADRAS: Quadra[] = [
+  { id: "q1", numero: 1, descricao: "Quadra poliesportiva coberta" },
+  { id: "q2", numero: 2, descricao: "Quadra poliesportiva coberta" },
+  { id: "q3", numero: 3, descricao: "Quadra poliesportiva coberta" },
+];
+
+/** Valor padrão por hora (igual para todas as quadras) */
+export const VALOR_HORA = 90; // em reais
+
+// ─── Horários ─────────────────────────────────────────────────────────────────
+
+/** Horários disponíveis para agendamento (blocos de 1 hora) */
 export const HORARIOS_DISPONIVEIS = [
   "07:00", "08:00", "09:00", "10:00", "11:00",
   "13:00", "14:00", "15:00", "16:00", "17:00",

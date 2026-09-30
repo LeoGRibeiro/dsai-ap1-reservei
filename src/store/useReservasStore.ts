@@ -5,6 +5,7 @@
 
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import type { Esporte } from "@/lib/quadras";
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -21,6 +22,16 @@ export interface Reserva {
   valorTotal: number;  // em reais
   status: StatusReserva;
   criadaEm: string;    // ISO datetime string
+  /**
+   * Esporte que será praticado (opcional).
+   * Quando informado, a administração prepara a quadra antes do horário
+   * (ex.: montar rede de vôlei, posicionar traves de futsal).
+   */
+  esporte?: Esporte;
+  /**
+   * Observações livres do cliente para a administração (opcional).
+   */
+  observacoes?: string;
 }
 
 // ─── State & Actions ─────────────────────────────────────────────────────────
