@@ -18,3 +18,7 @@ npm-debug.log*
 # OS
 .DS_Store
 Thumbs.db
+
+# Antigravity e Arquivos Locais
+AGENTS.md
+BACKLOG.md
