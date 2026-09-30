@@ -22,6 +22,7 @@ A modelagem da reserva ganha os campos: `valorSinal`, `valorPendente`, `nome`, `
 - O valor da hora por faixa (Manhã: R$ 70 / hora, Tarde: R$ 90 / hora, Noite: R$ 110 / hora) deve ter tipografia destacada e bem legível.
 - Cada quadra possui disponibilidade independente de horários. A seleção de um horário em uma quadra NÃO bloqueia aquele mesmo horário nas outras quadras. O cliente seleciona horários em uma única quadra por pedido.
 - Múltiplos horários só podem ser selecionados se forem estritamente consecutivos (ex: 13h, 14h, 15h).
+- Validação de horário limite: O cliente só pode selecionar um horário até 10 minutos antes do seu início, e só pode concluir o pagamento até 1 minuto antes do início do horário. Horários passados no dia atual não devem estar disponíveis.
 
 **Carrinho Lateral e Mobile**: Atualização em tempo real mostrando endereço, dia, horas, quadra e valor total dinâmico. No desktop/tablet (>= 768px), fica fixado como painel lateral à direita e o botão flutuante permanece oculto. No mobile (< 768px), o botão flutuante 'Ver reserva' é exibido no rodapé e abre a gaveta inferior (Sheet) com espaçamento e padding horizontal dedicados.
 
