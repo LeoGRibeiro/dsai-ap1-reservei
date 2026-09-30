@@ -1,6 +1,6 @@
 # Reservei 🏟️
 
-Plataforma web responsiva (mobile-first) de gestão e locação de espaços esportivos — um complexo com múltiplas quadras fictícias.
+Plataforma web responsiva de gestão e locação de espaços esportivos — um complexo com múltiplas quadras fictícias.
 
 ## Sobre o projeto
 
