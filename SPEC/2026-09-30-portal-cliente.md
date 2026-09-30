@@ -16,7 +16,9 @@ A modelagem da reserva ganha os campos: `valorSinal`, `valorPendente`, `nome`, `
 
 **Calendário**: Seleção de datas restrita a hoje + 7 dias no futuro.
 
-**Regras de Seleção**:
+**Layout e Seleção**:
+- O layout deve exibir no topo os dias do mês de forma horizontal. Abaixo do dia selecionado, liste todas as quadras verticalmente.
+- Para cada quadra, exiba imediatamente a lista de horários disponíveis logo abaixo do nome/descrição dela (sempre expandido, sem acordeão).
 - Ao selecionar um horário em uma quadra, as demais quadras ficam desabilitadas para aquele dia/hora.
 - Múltiplos horários só podem ser selecionados se forem estritamente consecutivos (ex: 13h, 14h, 15h).
 
@@ -24,13 +26,13 @@ A modelagem da reserva ganha os campos: `valorSinal`, `valorPendente`, `nome`, `
 
 **Lock Temporário**: Ao clicar em "Continuar", salva a reserva na store como "em_processamento", bloqueando a visualização destes horários para que ninguém mais os pegue durante o preenchimento.
 
-**Formulário de Identificação**: Solicita Nome, WhatsApp e CPF. Exibe os termos de cancelamento.
+**Formulário de Identificação**: Solicita Nome, WhatsApp e CPF. Exibe os termos de cancelamento e o aviso explícito: "A confirmação da sua reserva será enviada pelo WhatsApp.". O campo de observações possui o placeholder genérico: "Observações adicionais (opcional)".
 
-**Regra Financeira (Sinal)**: O checkout cobra apenas 40% do valor. O restante fica como pendente.
-
-**Checkout Mockado e Sincronização**:
+**Regras Financeiras e Checkout Mockado**:
+- No modal de pagamento/carrinho, há duas opções claras de escolha: "Pagar apenas o Sinal (40%)" ou "Pagar Valor Integral (100%)". O valor cobrado no Pix reflete a escolha.
+- Os campos valorSinal e valorPendente devem ser atualizados na Store com base nessa escolha.
 - Modal de Pix com botão "Simular Pagamento".
-- Ao confirmar, a reserva muda para "confirmada" e a UI dispara um Toast verde: "Mensagem enviada no WhatsApp".
+- Ao confirmar, a reserva muda para "confirmada" e a UI dispara um Toast verde com a mensagem correspondente (ex: "Mensagem enviada no WhatsApp. Pagamento integral confirmado!" ou "Mensagem enviada... Sinal confirmado, restante no local.").
 
 **Atualização Imediata (Vitrine)**: Ao fechar o aviso de sucesso, a tela do calendário deve refletir imediatamente aqueles horários como ocupados/indisponíveis (sem mostrar os dados de quem reservou).
 
