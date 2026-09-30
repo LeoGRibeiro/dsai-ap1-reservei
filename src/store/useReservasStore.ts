@@ -1,6 +1,7 @@
 /**
- * Store global de reservas e caixa — Zustand com persistência em LocalStorage.
- * Este é o "banco de dados" simulado da aplicação.
+ * Store global — Zustand com persistência em LocalStorage.
+ * ATENÇÃO: Componentes de UI não devem importar este arquivo diretamente.
+ * Use o hook de abstração: @/hooks/useReservasService
  */
 
 import { create } from "zustand";
@@ -9,41 +10,57 @@ import type { Esporte } from "@/lib/quadras";
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
-export type StatusReserva = "pendente" | "confirmada" | "cancelada";
+export type StatusReserva =
+  | "em_processamento" // lock temporário durante o checkout
+  | "pendente"         // sinal pago, restante a pagar no dia
+  | "confirmada"       // pagamento do sinal confirmado
+  | "cancelada";       // reserva cancelada
+
+export type StatusWhatsApp = "nao_enviado" | "enviado" | "falhou";
 
 export interface Reserva {
   id: string;
   quadraId: string;
+
+  // Identificação do cliente
   nomeCliente: string;
-  telefoneCliente: string;
-  data: string;        // ISO date string "YYYY-MM-DD"
-  horaInicio: string;  // "HH:MM"
-  horaFim: string;     // "HH:MM"
-  valorTotal: number;  // em reais
+  whatsappCliente: string;
+  cpfCliente: string;
+
+  // Agendamento
+  data: string;        // "YYYY-MM-DD"
+  horarios: string[];  // ex: ["13:00", "14:00", "15:00"]
+  horaInicio: string;  // primeiro slot
+  horaFim: string;     // última hora + 1h (ex: "16:00")
+
+  // Financeiro
+  valorTotal: number;
+  valorSinal: number;    // 40% do total
+  valorPendente: number; // 60% do total
+
+  // Estado
   status: StatusReserva;
-  criadaEm: string;    // ISO datetime string
-  /**
-   * Esporte que será praticado (opcional).
-   * Quando informado, a administração prepara a quadra antes do horário
-   * (ex.: montar rede de vôlei, posicionar traves de futsal).
-   */
+  statusWhatsApp: StatusWhatsApp;
+  criadaEm: string; // ISO datetime
+
+  // Opcionais
   esporte?: Esporte;
-  /**
-   * Observações livres do cliente para a administração (opcional).
-   */
   observacoes?: string;
 }
 
-// ─── State & Actions ─────────────────────────────────────────────────────────
+// ─── State & Actions ──────────────────────────────────────────────────────────
 
 interface ReservasState {
   reservas: Reserva[];
+
+  // Mutations
   adicionarReserva: (reserva: Reserva) => void;
-  confirmarReserva: (id: string) => void;
-  cancelarReserva: (id: string) => void;
-  // Financeiro
-  totalConfirmado: () => number;
-  totalPrevisto: () => number;
+  atualizarReserva: (id: string, dados: Partial<Reserva>) => void;
+  removerReserva: (id: string) => void;
+
+  // Computed helpers (usados pelo service)
+  getReservaById: (id: string) => Reserva | undefined;
+  getReservasPorData: (data: string) => Reserva[];
 }
 
 // ─── Store ────────────────────────────────────────────────────────────────────
@@ -56,32 +73,25 @@ export const useReservasStore = create<ReservasState>()(
       adicionarReserva: (reserva) =>
         set((state) => ({ reservas: [...state.reservas, reserva] })),
 
-      confirmarReserva: (id) =>
+      atualizarReserva: (id, dados) =>
         set((state) => ({
           reservas: state.reservas.map((r) =>
-            r.id === id ? { ...r, status: "confirmada" } : r
+            r.id === id ? { ...r, ...dados } : r
           ),
         })),
 
-      cancelarReserva: (id) =>
+      removerReserva: (id) =>
         set((state) => ({
-          reservas: state.reservas.map((r) =>
-            r.id === id ? { ...r, status: "cancelada" } : r
-          ),
+          reservas: state.reservas.filter((r) => r.id !== id),
         })),
 
-      totalConfirmado: () =>
-        get()
-          .reservas.filter((r) => r.status === "confirmada")
-          .reduce((acc, r) => acc + r.valorTotal, 0),
+      getReservaById: (id) => get().reservas.find((r) => r.id === id),
 
-      totalPrevisto: () =>
-        get()
-          .reservas.filter((r) => r.status !== "cancelada")
-          .reduce((acc, r) => acc + r.valorTotal, 0),
+      getReservasPorData: (data) =>
+        get().reservas.filter((r) => r.data === data),
     }),
     {
-      name: "reservei-reservas", // chave no LocalStorage
+      name: "reservei-v2", // versão da chave no LocalStorage
     }
   )
 );
