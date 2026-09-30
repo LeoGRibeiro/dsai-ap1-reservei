@@ -8,7 +8,7 @@ O objetivo é guiar o usuário em um funil de conversão intuitivo (mobile-first
 
 **Abstração de Banco de Dados**: Embora usemos Zustand + LocalStorage agora, a interface não deve consumir o Zustand diretamente. O estado deve ser acessado por uma camada de abstração (ex: Padrão Repository ou custom hooks), preparando o terreno para um banco de dados real no futuro.
 
-**Constantes**: Centralizar regras de negócio (ex: `PERCENTUAL_SINAL = 0.40`, `TOLERANCIA_CANCELAMENTO = 24h` e preços dinâmicos: 08-12h R$70, 12-17h R$90, 17-22h R$110).
+**Constantes**: Centralizar regras de negócio (ex: `PERCENTUAL_SINAL = 0.40`, `TOLERANCIA_CANCELAMENTO = 24h` e preços dinâmicos: Manhã 08h-12h R$70 | Tarde 12h-18h R$90 | Noite 18h-22h R$110).
 
 A modelagem da reserva ganha os campos: `valorSinal`, `valorPendente`, `nome`, `whatsapp`, `cpf` e `statusWhatsApp`.
 
@@ -18,23 +18,27 @@ A modelagem da reserva ganha os campos: `valorSinal`, `valorPendente`, `nome`, `
 
 **Layout e Seleção**:
 - O layout deve exibir no topo os dias do mês de forma horizontal. Abaixo do dia selecionado, liste todas as quadras verticalmente.
-- Para cada quadra, exiba imediatamente a lista de horários disponíveis logo abaixo do nome/descrição dela (sempre expandido, sem acordeão).
-- Ao selecionar um horário em uma quadra, as demais quadras ficam desabilitadas para aquele dia/hora.
+- Para cada quadra, exiba imediatamente a lista de horários disponíveis logo abaixo do nome dela (sempre expandido, sem acordeão e sem textos extras desnecessários de descrição).
+- O valor da hora por faixa (Manhã: R$ 70 / hora, Tarde: R$ 90 / hora, Noite: R$ 110 / hora) deve ter tipografia destacada e bem legível.
+- Cada quadra possui disponibilidade independente de horários. A seleção de um horário em uma quadra NÃO bloqueia aquele mesmo horário nas outras quadras. O cliente seleciona horários em uma única quadra por pedido.
 - Múltiplos horários só podem ser selecionados se forem estritamente consecutivos (ex: 13h, 14h, 15h).
 
-**Carrinho Lateral**: Atualização em tempo real mostrando endereço, dia, horas, quadra e valor total dinâmico.
+**Carrinho Lateral e Mobile**: Atualização em tempo real mostrando endereço, dia, horas, quadra e valor total dinâmico. No desktop/tablet (>= 768px), fica fixado como painel lateral à direita e o botão flutuante permanece oculto. No mobile (< 768px), o botão flutuante 'Ver reserva' é exibido no rodapé e abre a gaveta inferior (Sheet) com espaçamento e padding horizontal dedicados.
 
 **Lock Temporário**: Ao clicar em "Continuar", salva a reserva na store como "em_processamento", bloqueando a visualização destes horários para que ninguém mais os pegue durante o preenchimento.
 
-**Formulário de Identificação**: Solicita Nome, WhatsApp e CPF. Exibe os termos de cancelamento e o aviso explícito: "A confirmação da sua reserva será enviada pelo WhatsApp.". O campo de observações possui o placeholder genérico: "Observações adicionais (opcional)".
+**Modal de Confirmação e Identificação**:
+- Exibe o resumo do carrinho replicado no lado direito (em desktop) para relembrar todas as informações da reserva (quadra, data, horários, valor total).
+- Fornece previamente as opções claras de pagamento: "Pagar apenas o Sinal (40%)" ou "Pagar Valor Integral (100%)", com os valores correspondentes discriminados, e o botão de ir para pagamento posicionado logo abaixo do resumo e valor a ser pago.
+- No lado esquerdo, solicita Nome, WhatsApp e CPF, esporte e observações opcionais, além dos termos de cancelamento e o aviso explícito: "A confirmação da sua reserva será enviada pelo WhatsApp.".
 
-**Regras Financeiras e Checkout Mockado**:
-- No modal de pagamento/carrinho, há duas opções claras de escolha: "Pagar apenas o Sinal (40%)" ou "Pagar Valor Integral (100%)". O valor cobrado no Pix reflete a escolha.
-- Os campos valorSinal e valorPendente devem ser atualizados na Store com base nessa escolha.
+**Regras Financeiras e Modal Pix**:
+- Ao avançar para o pagamento, o Modal Pix apresenta o QR Code e código Pix já com o valor exato previamente selecionado (sinal ou integral), sem alternância confusa sobre o QR Code.
+- Os campos valorSinal e valorPendente devem ser gravados na Store com base nessa escolha.
 - Modal de Pix com botão "Simular Pagamento".
 - Ao confirmar, a reserva muda para "confirmada" e a UI dispara um Toast verde com a mensagem correspondente (ex: "Mensagem enviada no WhatsApp. Pagamento integral confirmado!" ou "Mensagem enviada... Sinal confirmado, restante no local.").
 
-**Atualização Imediata (Vitrine)**: Ao fechar o aviso de sucesso, a tela do calendário deve refletir imediatamente aqueles horários como ocupados/indisponíveis (sem mostrar os dados de quem reservou).
+**Atualização Imediata (Vitrine)**: Ao fechar o aviso de sucesso, a tela do calendário deve refletir imediatamente aqueles horários como ocupados/indisponíveis na quadra reservada (sem afetar as demais quadras que continuam livres naquele mesmo horário).
 
 **Integração Admin**: A reserva deve ser persistida de forma que o Dashboard Admin (que será feito na próxima spec) já consiga ler os dados, emitir avisos de nova reserva e contabilizar os valores no painel financeiro.
 
