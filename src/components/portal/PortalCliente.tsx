@@ -3,14 +3,19 @@
 import { useState, useCallback, useMemo } from "react";
 import { toast } from "sonner";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import Link from "next/link";
+import { User, Sparkles } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 import { CalendarioSelector } from "./CalendarioSelector";
 import { QuadraHorarioItem } from "./QuadraHorarioItem";
 import { CarrinhoLateral, BotaoCarrinhoMobile } from "./CarrinhoLateral";
 import { FormularioIdentificacao, type DadosIdentificacao } from "./FormularioIdentificacao";
 import { ModalPix } from "./ModalPix";
+import { ModalPosReservaCadastro } from "./ModalPosReservaCadastro";
 
 import { useReservasService } from "@/hooks/useReservasService";
+import { useUserAuth } from "@/hooks/useUserAuth";
 import {
   gerarDiasDisponiveis,
   getHoje,
@@ -37,6 +42,15 @@ export function PortalCliente() {
   const [dadosForm, setDadosForm] = useState<DadosIdentificacao | null>(null);
   const [tipoPagamentoEscolhido, setTipoPagamentoEscolhido] = useState<"sinal" | "integral">("sinal");
   const [isCarrinhoOpen, setIsCarrinhoOpen] = useState(false);
+
+  // ── Autenticação de Usuário ─────────────────────────────────────────────
+  const { user, isAutenticado } = useUserAuth();
+  const [mostrarModalPosCadastro, setMostrarModalPosCadastro] = useState(false);
+  const [dadosUltimaReserva, setDadosUltimaReserva] = useState<{
+    id: string;
+    nome: string;
+    whatsapp: string;
+  } | null>(null);
 
   // ── Service ─────────────────────────────────────────────────────────────
   const {
@@ -120,6 +134,7 @@ export function PortalCliente() {
       quadraId: quadraSelecionada,
       data: dataSelecionada,
       horarios: horariosSelecionados,
+      userId: user?.id,
     });
     setReservaIdAtual(id);
     setIsCarrinhoOpen(false);
@@ -128,6 +143,7 @@ export function PortalCliente() {
     quadraSelecionada,
     horariosSelecionados,
     dataSelecionada,
+    user?.id,
     criarReservaEmProcessamento,
   ]);
 
@@ -140,7 +156,7 @@ export function PortalCliente() {
       atualizarIdentificacao(reservaIdAtual, {
         nomeCliente: dados.nome,
         whatsappCliente: dados.whatsapp,
-        cpfCliente: dados.cpf,
+        cpfCliente: "",
         esporte: dados.esporte || undefined,
         observacoes: dados.observacoes || undefined,
       });
@@ -169,6 +185,16 @@ export function PortalCliente() {
 
       confirmarPagamento(reservaIdAtual, tipo);
 
+      // Se visitante sem conta, salva dados para convidar a criar senha
+      if (!isAutenticado && dadosForm) {
+        setDadosUltimaReserva({
+          id: reservaIdAtual,
+          nome: dadosForm.nome,
+          whatsapp: dadosForm.whatsapp,
+        });
+        setMostrarModalPosCadastro(true);
+      }
+
       // Reseta estado local
       setEtapa(null);
       setReservaIdAtual(null);
@@ -186,7 +212,7 @@ export function PortalCliente() {
         duration: 6000,
       });
     },
-    [reservaIdAtual, confirmarPagamento]
+    [reservaIdAtual, confirmarPagamento, isAutenticado, dadosForm, dataSelecionada, horariosSelecionados]
   );
 
   /** Cancela checkout e libera o lock */
@@ -229,9 +255,46 @@ export function PortalCliente() {
                 </span>
               </div>
             </div>
-            <div className="hidden md:flex items-center gap-2 text-xs text-slate-500">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              Agendamento online
+            <div className="flex items-center gap-3">
+              {user ? (
+                <Link href="/minha-conta">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="bg-slate-900 border-slate-700 hover:border-emerald-500/50 text-slate-200 hover:text-white rounded-full px-3.5 py-1 text-xs flex items-center gap-2"
+                  >
+                    <div className="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-[10px]">
+                      {user.nome.charAt(0).toUpperCase()}
+                    </div>
+                    <span className="font-semibold max-w-[100px] truncate sm:max-w-none">
+                      {user.nome.split(" ")[0]}
+                    </span>
+                    <span className="text-[10px] text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded-full hidden sm:inline">
+                      Minhas Reservas
+                    </span>
+                  </Button>
+                </Link>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <Link href="/login">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="text-slate-300 hover:text-white text-xs font-semibold px-3 py-1"
+                    >
+                      Entrar
+                    </Button>
+                  </Link>
+                  <Link href="/cadastro">
+                    <Button
+                      size="sm"
+                      className="bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold rounded-full text-xs px-3.5 py-1 shadow-md shadow-emerald-500/10"
+                    >
+                      Criar Conta
+                    </Button>
+                  </Link>
+                </div>
+              )}
             </div>
           </div>
         </header>
@@ -269,7 +332,7 @@ export function PortalCliente() {
 
               return (
                 <QuadraHorarioItem
-                  key={quadra.id}
+                  key={`${quadra.id}-${dataSelecionada}`}
                   quadra={quadra}
                   dataSelecionada={dataSelecionada}
                   horariosSelecionados={isAtiva ? horariosSelecionados : []}
@@ -334,6 +397,18 @@ export function PortalCliente() {
         onVoltar={() => setEtapa("formulario")}
         onCancelar={handleCancelarCheckout}
       />
+
+      {/* Modal: Convite de criação de conta pós-reserva para visitantes */}
+      {dadosUltimaReserva && (
+        <ModalPosReservaCadastro
+          open={mostrarModalPosCadastro}
+          reservaId={dadosUltimaReserva.id}
+          nomeCliente={dadosUltimaReserva.nome}
+          whatsappCliente={dadosUltimaReserva.whatsapp}
+          onClose={() => setMostrarModalPosCadastro(false)}
+          onSucesso={() => setMostrarModalPosCadastro(false)}
+        />
+      )}
     </>
   );
 }

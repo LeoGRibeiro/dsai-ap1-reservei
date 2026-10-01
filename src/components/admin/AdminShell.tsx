@@ -12,6 +12,7 @@ import { AdminLogin } from "./AdminLogin";
 import { AdminSidebar, type AdminView } from "./AdminSidebar";
 import { AdminDashboardPage } from "./AdminDashboardPage";
 import { AdminAgendaPage } from "./AdminAgendaPage";
+import { AdminUsuariosPage } from "./AdminUsuariosPage";
 
 // Placeholder pages para futuras specs
 function PlaceholderPage({ titulo }: { titulo: string }) {
@@ -75,6 +76,7 @@ export function AdminShell({ initialView = "dashboard" }: Props) {
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {view === "dashboard" && <AdminDashboardPage />}
           {view === "agenda" && <AdminAgendaPage />}
+          {view === "usuarios" && <AdminUsuariosPage />}
           {view === "financeiro" && (
             <PlaceholderPage titulo="Financeiro" />
           )}

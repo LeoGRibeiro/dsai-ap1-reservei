@@ -26,10 +26,12 @@ import {
   MessageCircle,
   ExternalLink,
   Send,
+  Sparkles,
 } from "lucide-react";
 import type { Reserva } from "@/store/useReservasStore";
 import { formatarMoeda, formatarDataExibicao } from "@/lib/constants";
 import { PREPARACAO_POR_ESPORTE } from "@/lib/quadras";
+import { getTelefonesCadastradosLocal } from "@/lib/supabase/authService";
 
 // ─── Config de status ─────────────────────────────────────────────────────────
 
@@ -318,6 +320,27 @@ export function ModalDetalhesReserva({ reserva, onFechar }: Props) {
               Cliente
             </p>
             <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl px-4">
+              {(() => {
+                const telDigits = reserva.whatsappCliente ? reserva.whatsappCliente.replace(/\D/g, "") : "";
+                const isMembro = Boolean(reserva.userId || (telDigits && getTelefonesCadastradosLocal().has(telDigits)));
+                return (
+                  <DetalheRow
+                    icon={Sparkles}
+                    label="Conta / Origem"
+                    value={
+                      isMembro ? (
+                        <span className="text-emerald-400 font-bold flex items-center gap-1">
+                          ⭐ Cliente Cadastrado (Membro)
+                        </span>
+                      ) : (
+                        <span className="text-slate-400 font-normal">
+                          Reserva Avulsa (Visitante)
+                        </span>
+                      )
+                    }
+                  />
+                );
+              })()}
               <DetalheRow
                 icon={User}
                 label="Nome"
@@ -327,11 +350,6 @@ export function ModalDetalhesReserva({ reserva, onFechar }: Props) {
                 icon={Phone}
                 label="WhatsApp"
                 value={reserva.whatsappCliente || "—"}
-              />
-              <DetalheRow
-                icon={CreditCard}
-                label="CPF"
-                value={reserva.cpfCliente || "—"}
               />
             </div>
           </section>

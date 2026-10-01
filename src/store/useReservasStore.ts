@@ -24,6 +24,7 @@ export interface Reserva {
   quadraId: string;
 
   // Identificação do cliente
+  userId?: string;
   nomeCliente: string;
   whatsappCliente: string;
   cpfCliente: string;
@@ -109,6 +110,7 @@ export const useReservasStore = create<ReservasState>()(
     }),
     {
       name: "reservei-v2", // versão da chave no LocalStorage (usada como cache/fallback)
+      partialize: (state) => ({ reservas: state.reservas }),
     }
   )
 );

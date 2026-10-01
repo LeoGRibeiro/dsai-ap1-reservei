@@ -28,6 +28,7 @@ import { useReservasService } from "@/hooks/useReservasService";
 import { QUADRAS, HORARIOS_DISPONIVEIS, PREPARACAO_POR_ESPORTE } from "@/lib/quadras";
 import { gerarDiasDisponiveis, formatarDataExibicao } from "@/lib/constants";
 import type { Reserva } from "@/store/useReservasStore";
+import { getTelefonesCadastradosLocal } from "@/lib/supabase/authService";
 
 // ─── Helpers de tempo ─────────────────────────────────────────────────────────
 
@@ -175,7 +176,11 @@ function BlocoReserva({
           <p
             className={`text-[10px] font-semibold leading-tight truncate flex-1 ${style.text}`}
           >
-            {reserva.nomeCliente || "—"}
+            {(() => {
+              const telDigits = reserva.whatsappCliente ? reserva.whatsappCliente.replace(/\D/g, "") : "";
+              const isMembro = Boolean(reserva.userId || (telDigits && getTelefonesCadastradosLocal().has(telDigits)));
+              return isMembro ? "⭐ " : "";
+            })()}{reserva.nomeCliente || "—"}
           </p>
           {eAtivo && (
             <span className="flex items-center gap-0.5 text-[9px] font-mono text-emerald-400 flex-shrink-0">
