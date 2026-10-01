@@ -251,63 +251,64 @@ function ReservasDoDia({
 
   return (
     <div className="bg-slate-900 border border-slate-700/50 rounded-2xl overflow-hidden">
-      {/* Header da tabela */}
-      <div className="hidden sm:grid grid-cols-[1fr_auto_auto_auto] gap-4 px-5 py-3 border-b border-slate-700/50 text-xs font-medium text-slate-500 uppercase tracking-wider">
-        <span>Cliente</span>
-        <span className="text-center">Quadra</span>
-        <span className="text-center">Horário</span>
-        <span className="text-right">Status</span>
-      </div>
+        {/* Header da tabela */}
+        <div className="hidden sm:grid grid-cols-[1fr_auto_auto_auto] gap-4 px-5 py-3 border-b border-slate-700/50 text-xs font-medium text-slate-500 uppercase tracking-wider">
+          <span>Cliente</span>
+          <span className="text-center">Quadra</span>
+          <span className="text-center">Horário</span>
+          <span className="text-right">Status</span>
+        </div>
 
-      {/* Linhas */}
-      <div className="divide-y divide-slate-700/30">
-        {reservasHoje.map((r) => {
-          const cfg = STATUS_CONFIG[r.status] ?? STATUS_CONFIG.pendente;
-          const quadraNum = r.quadraId.replace("q", "");
-          return (
-            <div
-              key={r.id}
-              className="px-5 py-4 flex flex-col sm:grid sm:grid-cols-[1fr_auto_auto_auto] gap-3 sm:gap-4 sm:items-center hover:bg-slate-800/40 transition-colors duration-150"
-            >
-              {/* Nome + esporte */}
-              <div>
-                <p className="font-medium text-white text-sm">
-                  {r.nomeCliente || "—"}
-                </p>
-                <p className="text-slate-500 text-xs mt-0.5">
-                  {r.esporte ?? "Sem esporte"} ·{" "}
-                  {r.valorPendente === 0
-                    ? `${formatarMoeda(r.valorSinal)} integral`
-                    : `${formatarMoeda(r.valorSinal)} sinal`}
-                </p>
-              </div>
+        {/* Linhas clicáveis */}
+        <div className="divide-y divide-slate-700/30">
+          {reservasHoje.map((r) => {
+            const cfg = STATUS_CONFIG[r.status] ?? STATUS_CONFIG.pendente;
+            const quadraNum = r.quadraId.replace("q", "");
+            return (
+              <a
+                key={r.id}
+                href={`/admin/reserva/${r.id}`}
+                className="w-full text-left px-5 py-4 flex flex-col sm:grid sm:grid-cols-[1fr_auto_auto_auto] gap-3 sm:gap-4 sm:items-center hover:bg-slate-800/60 active:bg-slate-800 transition-colors duration-150 cursor-pointer group"
+              >
+                {/* Nome + esporte */}
+                <div>
+                  <p className="font-medium text-white text-sm group-hover:text-emerald-300 transition-colors">
+                    {r.nomeCliente || "—"}
+                  </p>
+                  <p className="text-slate-500 text-xs mt-0.5">
+                    {r.esporte ?? "Sem esporte"} ·{" "}
+                    {r.valorPendente === 0
+                      ? `${formatarMoeda(r.valorSinal)} integral`
+                      : `${formatarMoeda(r.valorSinal)} sinal`}
+                  </p>
+                </div>
 
-              {/* Quadra */}
-              <div className="text-center">
-                <span className="text-xs font-medium text-slate-300 bg-slate-800 border border-slate-700 px-2.5 py-1 rounded-lg">
-                  Quadra {quadraNum}
-                </span>
-              </div>
+                {/* Quadra */}
+                <div className="text-center">
+                  <span className="text-xs font-medium text-slate-300 bg-slate-800 border border-slate-700 px-2.5 py-1 rounded-lg">
+                    Quadra {quadraNum}
+                  </span>
+                </div>
 
-              {/* Horário */}
-              <div className="text-center">
-                <span className="text-xs font-mono text-slate-300">
-                  {r.horaInicio} – {r.horaFim}
-                </span>
-              </div>
+                {/* Horário */}
+                <div className="text-center">
+                  <span className="text-xs font-mono text-slate-300">
+                    {r.horaInicio} – {r.horaFim}
+                  </span>
+                </div>
 
-              {/* Status */}
-              <div className="sm:text-right">
-                <span
-                  className={`text-xs font-medium px-2.5 py-1 rounded-full border ${cfg.bg} ${cfg.cor}`}
-                >
-                  {cfg.label}
-                </span>
-              </div>
-            </div>
-          );
-        })}
-      </div>
+                {/* Status */}
+                <div className="sm:text-right">
+                  <span
+                    className={`text-xs font-medium px-2.5 py-1 rounded-full border ${cfg.bg} ${cfg.cor}`}
+                  >
+                    {cfg.label}
+                  </span>
+                </div>
+              </a>
+            );
+          })}
+        </div>
     </div>
   );
 }

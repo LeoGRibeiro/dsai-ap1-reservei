@@ -114,11 +114,10 @@ const STATUS_STYLE: Record<
 
 interface BlocoProps {
   reserva: Reserva;
-  colInicio: number; // índice do primeiro slot
-  duracao: number;   // quantidade de slots
+  colInicio: number;
+  duracao: number;
   dataExibida: string;
-  agora: number;     // minutos desde meia-noite
-  onClick: (reserva: Reserva) => void;
+  agora: number;
 }
 
 function BlocoReserva({
@@ -127,7 +126,6 @@ function BlocoReserva({
   duracao,
   dataExibida,
   agora,
-  onClick,
 }: BlocoProps) {
   const progresso = calcularProgressoAtivo(reserva, dataExibida, agora);
   const eAtivo = progresso !== null;
@@ -142,12 +140,9 @@ function BlocoReserva({
   const width = duracao * SLOT_W - 8;
 
   return (
-    <div
-      role="button"
-      tabIndex={0}
+    <a
+      href={`/admin/reserva/${reserva.id}`}
       title={`${reserva.nomeCliente} · ${reserva.horaInicio}–${reserva.horaFim}`}
-      onClick={() => onClick(reserva)}
-      onKeyDown={(e) => e.key === "Enter" && onClick(reserva)}
       className={`absolute top-2 rounded-xl border cursor-pointer select-none
         transition-all duration-150 overflow-hidden group
         hover:scale-[1.02] hover:z-20 hover:shadow-lg
@@ -206,7 +201,7 @@ function BlocoReserva({
           </div>
         )}
       </div>
-    </div>
+    </a>
   );
 }
 
@@ -308,10 +303,9 @@ export function AdminAgendaPage() {
     (r) => r.data === dataExibida && r.status !== "cancelada"
   );
 
-  const handleClickBloco = useCallback((reserva: Reserva) => {
-    // TODO (próxima spec): abrir modal de detalhes da reserva
-    // O evento já está mapeado aqui conforme critério da spec.
-    console.info("[AdminAgenda] Reserva selecionada:", reserva.id);
+  const handleClickBloco = useCallback((_reserva: Reserva) => {
+    // Navegação tratada pelo <a href> em BlocoReserva.
+    // Middle-click / Ctrl+click abre em nova aba automaticamente.
   }, []);
 
   // ── Navegação de data ───────────────────────────────────────────────────────
@@ -555,7 +549,6 @@ export function AdminAgendaPage() {
                         duracao={duracao}
                         dataExibida={dataExibida}
                         agora={agora}
-                        onClick={handleClickBloco}
                       />
                     ) : null
                   )}
@@ -585,10 +578,6 @@ export function AdminAgendaPage() {
         </div>
       )}
 
-      {/* ── Nota sobre modal ────────────────────────────────────────────────── */}
-      <p className="text-slate-600 text-xs text-center">
-        Clique em qualquer bloco para ver os detalhes da reserva (modal na próxima spec).
-      </p>
     </div>
   );
 }
