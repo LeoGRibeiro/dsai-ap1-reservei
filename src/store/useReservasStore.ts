@@ -1,5 +1,6 @@
 /**
- * Store global — Zustand com persistência em LocalStorage.
+ * Store global — Zustand com sincronização com Supabase (PostgreSQL)
+ * e fallback em LocalStorage.
  * ATENÇÃO: Componentes de UI não devem importar este arquivo diretamente.
  * Use o hook de abstração: @/hooks/useReservasService
  */
@@ -52,8 +53,10 @@ export interface Reserva {
 
 interface ReservasState {
   reservas: Reserva[];
+  isLoadedFromDb: boolean;
 
   // Mutations
+  setReservas: (reservas: Reserva[]) => void;
   adicionarReserva: (reserva: Reserva) => void;
   atualizarReserva: (id: string, dados: Partial<Reserva>) => void;
   removerReserva: (id: string) => void;
@@ -69,9 +72,23 @@ export const useReservasStore = create<ReservasState>()(
   persist(
     (set, get) => ({
       reservas: [],
+      isLoadedFromDb: false,
+
+      setReservas: (reservas) =>
+        set({ reservas, isLoadedFromDb: true }),
 
       adicionarReserva: (reserva) =>
-        set((state) => ({ reservas: [...state.reservas, reserva] })),
+        set((state) => {
+          const existe = state.reservas.some((r) => r.id === reserva.id);
+          if (existe) {
+            return {
+              reservas: state.reservas.map((r) =>
+                r.id === reserva.id ? reserva : r
+              ),
+            };
+          }
+          return { reservas: [reserva, ...state.reservas] };
+        }),
 
       atualizarReserva: (id, dados) =>
         set((state) => ({
@@ -91,7 +108,7 @@ export const useReservasStore = create<ReservasState>()(
         get().reservas.filter((r) => r.data === data),
     }),
     {
-      name: "reservei-v2", // versão da chave no LocalStorage
+      name: "reservei-v2", // versão da chave no LocalStorage (usada como cache/fallback)
     }
   )
 );
