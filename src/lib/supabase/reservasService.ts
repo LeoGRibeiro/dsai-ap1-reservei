@@ -40,7 +40,14 @@ export async function inserirReservaSupabase(reserva: Reserva): Promise<boolean>
 
   try {
     const row = reservaToRow(reserva);
-    const { error } = await supabase.from(TABELA_RESERVAS).insert([row]);
+    let { error } = await supabase.from(TABELA_RESERVAS).insert([row]);
+
+    // Caso a coluna user_id ainda não exista na base Supabase do usuário, tenta sem ela
+    if (error && error.message.includes("user_id")) {
+      const { user_id, ...rowSemUserId } = row;
+      const retry = await supabase.from(TABELA_RESERVAS).insert([rowSemUserId]);
+      error = retry.error;
+    }
 
     if (error) {
       console.error("[Supabase] Erro ao inserir reserva:", error.message);
@@ -67,10 +74,24 @@ export async function atualizarReservaSupabase(
 
   try {
     const row = reservaToRow(dados);
-    const { error } = await supabase
+    let { error } = await supabase
       .from(TABELA_RESERVAS)
       .update(row)
       .eq("id", id);
+
+    // Se o erro for por falta da coluna user_id, tenta atualizar os demais campos
+    if (error && error.message.includes("user_id")) {
+      const { user_id, ...rowSemUserId } = row;
+      if (Object.keys(rowSemUserId).length > 0) {
+        const retry = await supabase
+          .from(TABELA_RESERVAS)
+          .update(rowSemUserId)
+          .eq("id", id);
+        error = retry.error;
+      } else {
+        return true;
+      }
+    }
 
     if (error) {
       console.error(`[Supabase] Erro ao atualizar reserva ${id}:`, error.message);

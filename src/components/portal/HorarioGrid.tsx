@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { HORARIOS_DISPONIVEIS } from "@/lib/quadras";
 import { saoConsecutivos, isHorarioExpirado } from "@/lib/constants";
@@ -40,6 +41,12 @@ export function HorarioGrid({
   horariosOcupados,
   onToggleHorario,
 }: Props) {
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
   const handleClick = (horario: string) => {
     if (horariosOcupados.includes(horario)) return;
     if (isHorarioExpirado(dataSelecionada, horario, 10)) return;
@@ -92,7 +99,9 @@ export function HorarioGrid({
               const hora = parseInt(horario.split(":")[0], 10);
               const isSelecionado = horariosSelecionados.includes(horario);
               const isOcupado = horariosOcupados.includes(horario);
-              const expiradoParaSelecao = isHorarioExpirado(dataSelecionada, horario, 10);
+              const expiradoParaSelecao = isMounted
+                ? isHorarioExpirado(dataSelecionada, horario, 10)
+                : false;
               const isDisabled = isOcupado || expiradoParaSelecao;
 
               return (

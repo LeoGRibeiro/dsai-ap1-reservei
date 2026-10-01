@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -14,7 +14,6 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import {
   mascaraWhatsApp,
-  mascaraCPF,
   formatarMoeda,
   formatarDataExibicao,
   PERCENTUAL_SINAL,
@@ -25,20 +24,20 @@ import { ESPORTES, QUADRAS, type Esporte } from "@/lib/quadras";
 import {
   User,
   Phone,
-  CreditCard,
   ChevronRight,
   MapPin,
   Calendar,
   Clock,
   Check,
   ShieldCheck,
+  Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useUserAuth } from "@/hooks/useUserAuth";
 
 export interface DadosIdentificacao {
   nome: string;
   whatsapp: string;
-  cpf: string;
   esporte: Esporte | "";
   observacoes: string;
 }
@@ -58,7 +57,6 @@ interface Props {
 const initialState: DadosIdentificacao = {
   nome: "",
   whatsapp: "",
-  cpf: "",
   esporte: "",
   observacoes: "",
 };
@@ -74,9 +72,21 @@ export function FormularioIdentificacao({
   valorSinal,
   valorPendente,
 }: Props) {
+  const { user } = useUserAuth();
   const [dados, setDados] = useState<DadosIdentificacao>(initialState);
   const [tipoPagamento, setTipoPagamento] = useState<"sinal" | "integral">("sinal");
   const [errors, setErrors] = useState<Partial<Record<keyof DadosIdentificacao, string>>>({});
+
+  // Preenche dados do usuário automaticamente se estiver logado
+  useEffect(() => {
+    if (user && open) {
+      setDados((prev) => ({
+        ...prev,
+        nome: prev.nome || user.nome,
+        whatsapp: prev.whatsapp || user.telefone,
+      }));
+    }
+  }, [user, open]);
 
   const quadra = QUADRAS.find((q) => q.id === quadraId);
   const horariosOrdenados = [...(horariosSelecionados ?? [])].sort();
@@ -95,17 +105,21 @@ export function FormularioIdentificacao({
 
   const validar = (): boolean => {
     const novosErrors: typeof errors = {};
-    if (!dados.nome.trim() || dados.nome.trim().length < 3)
-      novosErrors.nome = "Informe seu nome completo.";
-    if (dados.whatsapp.replace(/\D/g, "").length < 11)
-      novosErrors.whatsapp = "WhatsApp inválido. Use DDD + número.";
-    if (dados.cpf.replace(/\D/g, "").length !== 11)
-      novosErrors.cpf = "CPF inválido.";
+    if (!user) {
+      if (!dados.nome.trim() || dados.nome.trim().length < 3)
+        novosErrors.nome = "Informe seu nome completo.";
+      if (dados.whatsapp.replace(/\D/g, "").length < 11)
+        novosErrors.whatsapp = "WhatsApp inválido. Use DDD + número.";
+    }
     setErrors(novosErrors);
     return Object.keys(novosErrors).length === 0;
   };
 
   const handleSubmit = () => {
+    if (user) {
+      dados.nome = user.nome;
+      dados.whatsapp = user.telefone;
+    }
     if (!validar()) return;
     onConfirmar(dados, tipoPagamento);
   };
@@ -121,65 +135,75 @@ export function FormularioIdentificacao({
       <DialogContent className="bg-slate-900 border-slate-700 text-white w-[95vw] sm:max-w-3xl md:max-w-4xl max-h-[92vh] overflow-y-auto p-5 md:p-7">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           {/* ── Coluna Esquerda: Formulário de Identificação do Cliente ── */}
-          <div className="space-y-4 flex flex-col justify-between">
-            <DialogHeader className="mb-4">
+          <div className="flex flex-col justify-start space-y-4">
+            <DialogHeader className="text-left">
               <DialogTitle className="text-xl md:text-2xl font-black">
                 Confirmar Reserva
               </DialogTitle>
               <DialogDescription className="text-slate-400">
-                Preencha seus dados de contato, revise o resumo da compra e escolha como deseja pagar.
+                {user
+                  ? "Revise os detalhes, escolha o esporte e a modalidade de pagamento."
+                  : "Preencha seus dados de contato, revise o resumo da compra e escolha como deseja pagar."}
               </DialogDescription>
             </DialogHeader>
+
             <div className="space-y-3.5">
-              {/* Nome */}
-              <div className="space-y-1.5">
-                <Label className="text-slate-300 text-xs font-semibold flex items-center gap-1.5">
-                  <User className="w-3.5 h-3.5 text-emerald-400" /> Nome completo *
-                </Label>
-                <Input
-                  value={dados.nome}
-                  onChange={(e) => set("nome", e.target.value)}
-                  placeholder="Seu nome completo"
-                  className="bg-slate-800/80 border-slate-700 text-white placeholder:text-slate-500 focus:border-emerald-500 focus:ring-emerald-500/20 h-10"
-                />
-                {errors.nome && (
-                  <p className="text-xs text-red-400 font-medium">{errors.nome}</p>
-                )}
-              </div>
+              {user ? (
+                /* Card do Usuário Logado (direto, sem pedir nome e telefone) */
+                <div className="p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 font-bold flex items-center justify-center text-sm shadow-inner">
+                      {user.nome.charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[11px] text-emerald-400 font-medium">Conta Conectada</span>
+                        <Sparkles className="w-3 h-3 text-emerald-400" />
+                      </div>
+                      <p className="text-sm font-bold text-white leading-tight mt-0.5">{user.nome}</p>
+                    </div>
+                  </div>
+                  <span className="text-xs font-mono text-emerald-400 bg-emerald-500/15 px-2.5 py-1 rounded-lg border border-emerald-500/30">
+                    {user.telefone}
+                  </span>
+                </div>
+              ) : (
+                /* Visitante: solicita apenas Nome e WhatsApp */
+                <>
+                  {/* Nome */}
+                  <div className="space-y-1.5">
+                    <Label className="text-slate-300 text-xs font-semibold flex items-center gap-1.5">
+                      <User className="w-3.5 h-3.5 text-emerald-400" /> Nome completo *
+                    </Label>
+                    <Input
+                      value={dados.nome}
+                      onChange={(e) => set("nome", e.target.value)}
+                      placeholder="Seu nome completo"
+                      className="bg-slate-800/80 border-slate-700 text-white placeholder:text-slate-500 focus:border-emerald-500 focus:ring-emerald-500/20 h-10"
+                    />
+                    {errors.nome && (
+                      <p className="text-xs text-red-400 font-medium">{errors.nome}</p>
+                    )}
+                  </div>
 
-              {/* WhatsApp */}
-              <div className="space-y-1.5">
-                <Label className="text-slate-300 text-xs font-semibold flex items-center gap-1.5">
-                  <Phone className="w-3.5 h-3.5 text-emerald-400" /> WhatsApp *
-                </Label>
-                <Input
-                  value={dados.whatsapp}
-                  onChange={(e) => set("whatsapp", mascaraWhatsApp(e.target.value))}
-                  placeholder="(11) 99999-0000"
-                  inputMode="numeric"
-                  className="bg-slate-800/80 border-slate-700 text-white placeholder:text-slate-500 focus:border-emerald-500 focus:ring-emerald-500/20 h-10"
-                />
-                {errors.whatsapp && (
-                  <p className="text-xs text-red-400 font-medium">{errors.whatsapp}</p>
-                )}
-              </div>
-
-              {/* CPF */}
-              <div className="space-y-1.5">
-                <Label className="text-slate-300 text-xs font-semibold flex items-center gap-1.5">
-                  <CreditCard className="w-3.5 h-3.5 text-emerald-400" /> CPF *
-                </Label>
-                <Input
-                  value={dados.cpf}
-                  onChange={(e) => set("cpf", mascaraCPF(e.target.value))}
-                  placeholder="000.000.000-00"
-                  inputMode="numeric"
-                  className="bg-slate-800/80 border-slate-700 text-white placeholder:text-slate-500 focus:border-emerald-500 focus:ring-emerald-500/20 h-10"
-                />
-                {errors.cpf && (
-                  <p className="text-xs text-red-400 font-medium">{errors.cpf}</p>
-                )}
-              </div>
+                  {/* WhatsApp */}
+                  <div className="space-y-1.5">
+                    <Label className="text-slate-300 text-xs font-semibold flex items-center gap-1.5">
+                      <Phone className="w-3.5 h-3.5 text-emerald-400" /> WhatsApp *
+                    </Label>
+                    <Input
+                      value={dados.whatsapp}
+                      onChange={(e) => set("whatsapp", mascaraWhatsApp(e.target.value))}
+                      placeholder="(11) 99999-0000"
+                      inputMode="numeric"
+                      className="bg-slate-800/80 border-slate-700 text-white placeholder:text-slate-500 focus:border-emerald-500 focus:ring-emerald-500/20 h-10"
+                    />
+                    {errors.whatsapp && (
+                      <p className="text-xs text-red-400 font-medium">{errors.whatsapp}</p>
+                    )}
+                  </div>
+                </>
+              )}
 
               {/* Esporte (opcional) */}
               <div className="space-y-1.5">

@@ -15,9 +15,10 @@ import {
   X,
   Shield,
   ChevronRight,
+  Users,
 } from "lucide-react";
 
-export type AdminView = "dashboard" | "agenda" | "financeiro";
+export type AdminView = "dashboard" | "agenda" | "usuarios" | "financeiro";
 
 interface NavItem {
   id: AdminView;
@@ -28,6 +29,7 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { id: "agenda", label: "Agenda de Ocupação", icon: CalendarDays },
+  { id: "usuarios", label: "Usuários", icon: Users },
   { id: "financeiro", label: "Financeiro", icon: DollarSign },
 ];
 

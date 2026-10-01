@@ -14,6 +14,7 @@ import {
   ArrowUpRight,
 } from "lucide-react";
 import { useReservasService } from "@/hooks/useReservasService";
+import { getTelefonesCadastradosLocal } from "@/lib/supabase/authService";
 
 function formatarMoeda(valor: number) {
   return valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -272,9 +273,24 @@ function ReservasDoDia({
               >
                 {/* Nome + esporte */}
                 <div>
-                  <p className="font-medium text-white text-sm group-hover:text-emerald-300 transition-colors">
-                    {r.nomeCliente || "—"}
-                  </p>
+                  <div className="flex items-center gap-2">
+                    <p className="font-medium text-white text-sm group-hover:text-emerald-300 transition-colors">
+                      {r.nomeCliente || "—"}
+                    </p>
+                    {(() => {
+                      const telDigits = r.whatsappCliente ? r.whatsappCliente.replace(/\D/g, "") : "";
+                      const isMembro = Boolean(r.userId || (telDigits && getTelefonesCadastradosLocal().has(telDigits)));
+                      return isMembro ? (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                          ⭐ Cadastrado
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700">
+                          Avulsa
+                        </span>
+                      );
+                    })()}
+                  </div>
                   <p className="text-slate-500 text-xs mt-0.5">
                     {r.esporte ?? "Sem esporte"} ·{" "}
                     {r.valorPendente === 0

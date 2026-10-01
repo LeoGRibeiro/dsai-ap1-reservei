@@ -3,6 +3,8 @@ import type { Esporte } from "@/lib/quadras";
 
 export interface ReservaDbRow {
   id: string;
+  user_id?: string | null;
+  userId?: string | null;
   quadra_id?: string;
   quadraId?: string;
   nome_cliente?: string;
@@ -63,8 +65,15 @@ export function rowToReserva(row: ReservaDbRow): Reserva {
       ? `${String(parseInt(horariosArray[horariosArray.length - 1], 10) + 1).padStart(2, "0")}:00`
       : "09:00");
 
+  let userId = row.user_id ?? row.userId ?? undefined;
+  const rawCpf = String(row.cpf_cliente ?? row.cpfCliente ?? "");
+  if (!userId && rawCpf.startsWith("uid:")) {
+    userId = rawCpf.replace("uid:", "");
+  }
+
   return {
     id: row.id,
+    userId,
     quadraId: row.quadra_id ?? row.quadraId ?? "",
     nomeCliente: row.nome_cliente ?? row.nomeCliente ?? "",
     whatsappCliente:
@@ -72,7 +81,7 @@ export function rowToReserva(row: ReservaDbRow): Reserva {
       row.whatsappCliente ??
       row.telefone_cliente ??
       "",
-    cpfCliente: row.cpf_cliente ?? row.cpfCliente ?? "",
+    cpfCliente: rawCpf.startsWith("uid:") ? "" : rawCpf,
     data: typeof row.data === "string" ? row.data.split("T")[0] : String(row.data),
     horarios: horariosArray,
     horaInicio,
@@ -95,13 +104,22 @@ export function reservaToRow(reserva: Partial<Reserva>): Record<string, unknown>
   const row: Record<string, unknown> = {};
 
   if (reserva.id !== undefined) row.id = reserva.id;
+  if (reserva.userId !== undefined) {
+    row.user_id = reserva.userId ?? null;
+    // Fallback: se user_id ainda não existir no schema do banco, salva o id no campo cpf_cliente
+    if (reserva.userId) {
+      row.cpf_cliente = `uid:${reserva.userId}`;
+    }
+  }
   if (reserva.quadraId !== undefined) row.quadra_id = reserva.quadraId;
   if (reserva.nomeCliente !== undefined) row.nome_cliente = reserva.nomeCliente;
   if (reserva.whatsappCliente !== undefined) {
     row.whatsapp_cliente = reserva.whatsappCliente;
     row.telefone_cliente = reserva.whatsappCliente;
   }
-  if (reserva.cpfCliente !== undefined) row.cpf_cliente = reserva.cpfCliente;
+  if (reserva.cpfCliente !== undefined && !row.cpf_cliente) {
+    row.cpf_cliente = reserva.cpfCliente;
+  }
   if (reserva.data !== undefined) row.data = reserva.data;
   if (reserva.horarios !== undefined) row.horarios = reserva.horarios;
   if (reserva.horaInicio !== undefined) row.hora_inicio = reserva.horaInicio;
@@ -116,4 +134,12 @@ export function reservaToRow(reserva: Partial<Reserva>): Record<string, unknown>
   if (reserva.observacoes !== undefined) row.observacoes = reserva.observacoes ?? null;
 
   return row;
+}
+
+export interface UserProfile {
+  id: string;
+  nome: string;
+  telefone: string;
+  dataNascimento?: string | null;
+  criadoEm?: string;
 }

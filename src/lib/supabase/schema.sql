@@ -4,6 +4,7 @@
 
 CREATE TABLE IF NOT EXISTS public.reservas (
   id TEXT PRIMARY KEY,
+  user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
   quadra_id TEXT NOT NULL,
   nome_cliente TEXT NOT NULL DEFAULT '',
   whatsapp_cliente TEXT NOT NULL DEFAULT '',
@@ -22,6 +23,36 @@ CREATE TABLE IF NOT EXISTS public.reservas (
   observacoes TEXT,
   criada_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Migração incremental caso a coluna user_id não exista em bases já criadas
+ALTER TABLE public.reservas ADD COLUMN IF NOT EXISTS user_id TEXT;
+
+-- Tabela de Usuários para Login com WhatsApp e Senha (sem exigência de provedor de SMS pago)
+CREATE TABLE IF NOT EXISTS public.usuarios (
+  id TEXT PRIMARY KEY,
+  nome TEXT NOT NULL DEFAULT '',
+  telefone TEXT UNIQUE NOT NULL,
+  senha TEXT NOT NULL,
+  data_nascimento DATE,
+  criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_usuarios_telefone ON public.usuarios (telefone);
+
+-- Habilitar RLS em usuarios
+ALTER TABLE public.usuarios ENABLE ROW LEVEL SECURITY;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE tablename = 'usuarios' AND policyname = 'Permitir acesso completo a usuarios'
+  ) THEN
+    CREATE POLICY "Permitir acesso completo a usuarios"
+      ON public.usuarios FOR ALL
+      USING (true)
+      WITH CHECK (true);
+  END IF;
+END $$;
 
 -- Índices para consultas otimizadas da agenda e prevenção de double booking
 CREATE INDEX IF NOT EXISTS idx_reservas_data_quadra ON public.reservas (data, quadra_id);
@@ -64,6 +95,29 @@ BEGIN
     CREATE POLICY "Permitir remoção de reservas"
       ON public.reservas FOR DELETE
       USING (true);
+  END IF;
+END $$;
+
+-- Habilitar RLS em profiles
+ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE tablename = 'profiles' AND policyname = 'Permitir leitura de perfis'
+  ) THEN
+    CREATE POLICY "Permitir leitura de perfis"
+      ON public.profiles FOR SELECT
+      USING (true);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE tablename = 'profiles' AND policyname = 'Permitir inserção e atualização do próprio perfil'
+  ) THEN
+    CREATE POLICY "Permitir inserção e atualização do próprio perfil"
+      ON public.profiles FOR ALL
+      USING (true)
+      WITH CHECK (true);
   END IF;
 END $$;
 

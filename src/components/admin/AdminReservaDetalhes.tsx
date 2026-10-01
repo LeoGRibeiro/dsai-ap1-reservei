@@ -28,12 +28,14 @@ import {
   ExternalLink,
   Send,
   Shield,
+  Sparkles,
 } from "lucide-react";
 import { useReservasStore } from "@/store/useReservasStore";
 import { useAdminAuth } from "@/hooks/useAdminAuth";
 import { formatarMoeda, formatarDataExibicao } from "@/lib/constants";
 import { PREPARACAO_POR_ESPORTE } from "@/lib/quadras";
 import type { Reserva } from "@/store/useReservasStore";
+import { getTelefonesCadastradosLocal } from "@/lib/supabase/authService";
 
 // ─── Config de status ─────────────────────────────────────────────────────────
 
@@ -390,6 +392,27 @@ export function AdminReservaDetalhes({ reservaId }: { reservaId: string }) {
 
             {/* Cliente */}
             <SecaoCard titulo="Cliente">
+              {(() => {
+                const telDigits = reserva.whatsappCliente ? reserva.whatsappCliente.replace(/\D/g, "") : "";
+                const isMembro = Boolean(reserva.userId || (telDigits && getTelefonesCadastradosLocal().has(telDigits)));
+                return (
+                  <DetalheRow
+                    icon={Sparkles}
+                    label="Tipo de Cliente"
+                    value={
+                      isMembro ? (
+                        <span className="text-emerald-400 font-bold flex items-center gap-1">
+                          ⭐ Cliente Cadastrado (Membro)
+                        </span>
+                      ) : (
+                        <span className="text-slate-400 font-normal">
+                          Reserva Avulsa (Visitante)
+                        </span>
+                      )
+                    }
+                  />
+                );
+              })()}
               <DetalheRow icon={User} label="Nome" value={reserva.nomeCliente || "—"} />
               <DetalheRow
                 icon={Phone}
@@ -408,11 +431,6 @@ export function AdminReservaDetalhes({ reservaId }: { reservaId: string }) {
                     "—"
                   )
                 }
-              />
-              <DetalheRow
-                icon={CreditCard}
-                label="CPF"
-                value={reserva.cpfCliente || "—"}
               />
             </SecaoCard>
 

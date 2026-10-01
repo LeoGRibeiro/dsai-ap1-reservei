@@ -138,6 +138,11 @@ export function mascaraCPF(valor: string): string {
 
 /** 
  * Verifica se um horário de uma data específica expirou.
+ * Regras:
+ * - Se a data selecionada for posterior a hoje: nunca expira (dias futuros sempre disponíveis).
+ * - Se a data selecionada for anterior a hoje: sempre expirada.
+ * - Se for hoje: expira se faltar menos de `minutosAntecedencia` para o início do horário.
+ *
  * @param dataSelecionada Formato "YYYY-MM-DD"
  * @param horario Formato "HH:mm"
  * @param minutosAntecedencia Limite de minutos antes do horário para considerar expirado
@@ -147,6 +152,17 @@ export function isHorarioExpirado(
   horario: string,
   minutosAntecedencia: number
 ): boolean {
+  if (!dataSelecionada || !horario) return false;
+
+  const hoje = getHoje();
+  if (dataSelecionada > hoje) {
+    return false; // Dias futuros nunca têm horários expirados
+  }
+  if (dataSelecionada < hoje) {
+    return true; // Dias passados estão expirados
+  }
+
+  // É o dia de hoje: calcula horário local
   const agora = new Date();
   const [ano, mes, dia] = dataSelecionada.split("-").map(Number);
   const [hora, minuto] = horario.split(":").map(Number);
@@ -154,5 +170,55 @@ export function isHorarioExpirado(
   const dataHorario = new Date(ano, mes - 1, dia, hora, minuto, 0, 0);
   const tempoLimite = new Date(dataHorario.getTime() - minutosAntecedencia * 60000);
   
-  return agora > tempoLimite;
+  return agora.getTime() > tempoLimite.getTime();
 }
+
+
+/**
+ * Normaliza número de telefone brasileiro para o formato internacional E.164 (+55...).
+ * Exemplo: "(11) 99999-8888" -> "+5511999998888"
+ */
+export function normalizarTelefoneE164(telefone: string): string {
+  const nums = telefone.replace(/\D/g, "");
+  if (!nums) return "";
+  if (nums.startsWith("55") && nums.length >= 12) {
+    return `+${nums}`;
+  }
+  return `+55${nums}`;
+}
+
+export interface RegrasSenha {
+  minimo: boolean;
+  maiuscula: boolean;
+  especial: boolean;
+}
+
+/**
+ * Valida os requisitos de segurança da senha:
+ * - Mínimo de 6 caracteres
+ * - Pelo menos uma letra maiúscula
+ * - Pelo menos um caractere especial (!@#$%^&*...)
+ */
+export function validarSenhaForte(senha: string): {
+  valido: boolean;
+  erros: string[];
+  regras: RegrasSenha;
+} {
+  const regras: RegrasSenha = {
+    minimo: senha.length >= 6,
+    maiuscula: /[A-Z]/.test(senha),
+    especial: /[^A-Za-z0-9]/.test(senha),
+  };
+
+  const erros: string[] = [];
+  if (!regras.minimo) erros.push("A senha deve ter pelo menos 6 caracteres.");
+  if (!regras.maiuscula) erros.push("A senha deve conter ao menos uma letra maiúscula (A-Z).");
+  if (!regras.especial) erros.push("A senha deve conter ao menos um caractere especial (!@#$...).");
+
+  return {
+    valido: erros.length === 0,
+    erros,
+    regras,
+  };
+}
+

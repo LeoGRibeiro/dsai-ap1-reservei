@@ -26,6 +26,10 @@ import {
   subscreverReservasSupabase,
 } from "@/lib/supabase/reservasService";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
+import {
+  listarUsuariosCadastrados,
+  getTelefonesCadastradosLocal,
+} from "@/lib/supabase/authService";
 
 // ─── Tipos de entrada para criação ───────────────────────────────────────────
 
@@ -33,11 +37,35 @@ export interface DadosCriacaoReserva {
   quadraId: string;
   data: string;
   horarios: string[];
+  userId?: string;
   nomeCliente?: string;
   whatsappCliente?: string;
   cpfCliente?: string;
   esporte?: Esporte;
   observacoes?: string;
+}
+
+// ─── Helper de enriquecimento com usuários cadastrados ───────────────────────
+
+async function enriquecerReservasComUsuarios(lista: Reserva[]): Promise<Reserva[]> {
+  try {
+    const usuarios = await listarUsuariosCadastrados();
+    const telMap = new Map(usuarios.map((u) => [u.telefone.replace(/\D/g, ""), u.id]));
+
+    return lista.map((r) => {
+      if (!r.userId && r.whatsappCliente) {
+        const digits = r.whatsappCliente.replace(/\D/g, "");
+        if (telMap.has(digits)) {
+          const resolvedId = telMap.get(digits)!;
+          void atualizarReservaSupabase(r.id, { userId: resolvedId });
+          return { ...r, userId: resolvedId };
+        }
+      }
+      return r;
+    });
+  } catch {
+    return lista;
+  }
 }
 
 // ─── Gerenciamento singleton de canal Realtime ────────────────────────────────
@@ -63,10 +91,13 @@ export function useReservasService() {
     let isMounted = true;
 
     // Busca dados do Supabase na inicialização
-    if (isSupabaseConfigured() && !isLoadedFromDb) {
-      fetchReservasSupabase().then((dados) => {
+    if (isSupabaseConfigured()) {
+      fetchReservasSupabase().then(async (dados) => {
         if (isMounted && dados) {
-          setReservas(dados);
+          const enriquecidos = await enriquecerReservasComUsuarios(dados);
+          if (isMounted) {
+            setReservas(enriquecidos);
+          }
         }
       });
     }
@@ -76,10 +107,15 @@ export function useReservasService() {
     if (realtimeListenersCount === 1 && isSupabaseConfigured()) {
       activeRealtimeCleanup = subscreverReservasSupabase(
         (nova) => {
-          useReservasStore.getState().adicionarReserva(nova);
+          void enriquecerReservasComUsuarios([nova]).then(([enriquecida]) => {
+            useReservasStore.getState().adicionarReserva(enriquecida || nova);
+          });
         },
         (atualizada) => {
-          useReservasStore.getState().atualizarReserva(atualizada.id, atualizada);
+          void enriquecerReservasComUsuarios([atualizada]).then(([enriquecida]) => {
+            const finalReserva = enriquecida || atualizada;
+            useReservasStore.getState().atualizarReserva(finalReserva.id, finalReserva);
+          });
         },
         (idDeletado) => {
           useReservasStore.getState().removerReserva(idDeletado);
@@ -164,8 +200,16 @@ export function useReservasService() {
       const valorTotal = calcularValorTotal(horarios);
       const id = `rsv_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
 
+      // Se userId não foi passado explicitamente mas o cliente tem conta cadastrada com esse telefone
+      let finalUserId = dados.userId;
+      if (!finalUserId && dados.whatsappCliente) {
+        const digits = dados.whatsappCliente.replace(/\D/g, "");
+        finalUserId = getTelefonesCadastradosLocal().get(digits);
+      }
+
       const reserva: Reserva = {
         id,
+        userId: finalUserId,
         quadraId: dados.quadraId,
         data: dados.data,
         horarios,
@@ -204,12 +248,25 @@ export function useReservasService() {
       dados: Pick<Reserva, "nomeCliente" | "whatsappCliente" | "cpfCliente"> & {
         esporte?: Esporte;
         observacoes?: string;
+        userId?: string;
       }
     ) => {
-      atualizarReserva(id, dados);
-      void atualizarReservaSupabase(id, dados);
+      const reservaAtual = getReservaById(id);
+      let userIdFinal = dados.userId || reservaAtual?.userId;
+      if (!userIdFinal && dados.whatsappCliente) {
+        const digits = dados.whatsappCliente.replace(/\D/g, "");
+        userIdFinal = getTelefonesCadastradosLocal().get(digits);
+      }
+
+      const atualizacao = {
+        ...dados,
+        ...(userIdFinal ? { userId: userIdFinal } : {}),
+      };
+
+      atualizarReserva(id, atualizacao);
+      void atualizarReservaSupabase(id, atualizacao);
     },
-    [atualizarReserva]
+    [atualizarReserva, getReservaById]
   );
 
   /**
@@ -286,13 +343,42 @@ export function useReservasService() {
     [atualizarReserva]
   );
 
-  /** Força recarregamento das reservas do Supabase */
+  /** Força recarregamento das reservas do Supabase com enriquecimento de usuários */
   const recarregarReservas = useCallback(async () => {
     const dados = await fetchReservasSupabase();
     if (dados) {
-      setReservas(dados);
+      const enriquecidos = await enriquecerReservasComUsuarios(dados);
+      setReservas(enriquecidos);
     }
   }, [setReservas]);
+
+  /** Vincula uma reserva existente a um usuário recém-cadastrado */
+  const vincularReservaAoUsuario = useCallback(
+    (reservaId: string, userId: string) => {
+      atualizarReserva(reservaId, { userId });
+      void atualizarReservaSupabase(reservaId, { userId });
+    },
+    [atualizarReserva]
+  );
+
+  /** Retorna todas as reservas de um usuário específico */
+  const getReservasDoUsuario = useCallback(
+    (userId: string): Reserva[] => {
+      return reservas.filter((r) => r.userId === userId);
+    },
+    [reservas]
+  );
+
+  /** Verifica se a reserva pertence a um cliente cadastrado (membro) */
+  const isReservaDeMembro = useCallback(
+    (reserva: Reserva): boolean => {
+      if (reserva.userId) return true;
+      if (!reserva.whatsappCliente) return false;
+      const digits = reserva.whatsappCliente.replace(/\D/g, "");
+      return getTelefonesCadastradosLocal().has(digits);
+    },
+    []
+  );
 
   return {
     // Queries
@@ -303,6 +389,7 @@ export function useReservasService() {
     getTodasReservas,
     financeiro,
     isSupabaseConfigured: isSupabaseConfigured(),
+    isReservaDeMembro,
 
     // Mutations
     criarReservaEmProcessamento,
@@ -313,5 +400,7 @@ export function useReservasService() {
     cancelarReserva,
     atualizarStatus,
     recarregarReservas,
+    vincularReservaAoUsuario,
+    getReservasDoUsuario,
   };
 }

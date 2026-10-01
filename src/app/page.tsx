@@ -7,6 +7,8 @@ export const metadata: Metadata = {
     "Agende sua quadra esportiva online de forma rápida e segura. Futsal, Vôlei, Basquete, Handebol e mais.",
 };
 
+export const dynamic = "force-dynamic";
+
 export default function Home() {
   return <PortalCliente />;
 }
