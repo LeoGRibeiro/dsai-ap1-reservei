@@ -3,12 +3,15 @@
 import { cn } from "@/lib/utils";
 import { type Quadra } from "@/lib/quadras";
 import { HorarioGrid } from "./HorarioGrid";
+import { type AvisoEscolinha } from "@/lib/recorrencia/agenda";
 
 interface Props {
   quadra: Quadra;
   dataSelecionada: string;
   horariosSelecionados: string[];
   horariosOcupados: string[];
+  /** Blocos de escolinha nesta quadra/data (exibe banner promocional) */
+  avisosEscolinha?: AvisoEscolinha[];
   isAtiva: boolean; // esta quadra está com seleção ativa?
   onToggleHorario: (horario: string, quadraId: string) => void;
 }
@@ -18,6 +21,7 @@ export function QuadraHorarioItem({
   dataSelecionada,
   horariosSelecionados,
   horariosOcupados,
+  avisosEscolinha = [],
   isAtiva,
   onToggleHorario,
 }: Props) {
@@ -52,6 +56,7 @@ export function QuadraHorarioItem({
         dataSelecionada={dataSelecionada}
         horariosSelecionados={horariosSelecionados}
         horariosOcupados={horariosOcupados}
+        avisosEscolinha={avisosEscolinha}
         onToggleHorario={(horario) => onToggleHorario(horario, quadra.id)}
       />
     </div>

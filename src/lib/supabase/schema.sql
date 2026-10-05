@@ -132,3 +132,51 @@ BEGIN
 EXCEPTION
   WHEN duplicate_object THEN NULL;
 END $$;
+
+-- ==============================================================================
+-- Reservas recorrentes (Escolinhas e Grupos Comuns)
+-- Spec: SPEC/2026-10-05-reservas-recorrentes.md
+-- ==============================================================================
+
+-- Campos que ligam cada ocorrência (reserva materializada) ao seu contrato
+ALTER TABLE public.reservas ADD COLUMN IF NOT EXISTS contrato_id TEXT;
+ALTER TABLE public.reservas ADD COLUMN IF NOT EXISTS tipo_reserva TEXT DEFAULT 'avulsa';
+ALTER TABLE public.reservas ADD COLUMN IF NOT EXISTS aviso_cancelamento_em DATE;
+
+CREATE INDEX IF NOT EXISTS idx_reservas_contrato ON public.reservas (contrato_id);
+
+-- Contratos recorrentes: um registro por escolinha ou grupo
+CREATE TABLE IF NOT EXISTS public.contratos_recorrentes (
+  id TEXT PRIMARY KEY,
+  tipo TEXT NOT NULL CHECK (tipo IN ('escolinha', 'grupo')),
+  nome TEXT NOT NULL,
+  esporte TEXT,
+  descricao TEXT,
+  responsavel_nome TEXT NOT NULL DEFAULT '',
+  contato_whatsapp TEXT NOT NULL DEFAULT '',
+  quadra_id TEXT NOT NULL,
+  dias_semana INTEGER[] NOT NULL DEFAULT '{}',
+  hora_inicio TEXT NOT NULL,
+  hora_fim TEXT NOT NULL,
+  data_inicio DATE NOT NULL,
+  meses INTEGER NOT NULL DEFAULT 6,
+  ativo BOOLEAN NOT NULL DEFAULT TRUE,
+  criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_contratos_tipo ON public.contratos_recorrentes (tipo, ativo);
+
+ALTER TABLE public.contratos_recorrentes ENABLE ROW LEVEL SECURITY;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE tablename = 'contratos_recorrentes' AND policyname = 'Permitir acesso completo a contratos'
+  ) THEN
+    CREATE POLICY "Permitir acesso completo a contratos"
+      ON public.contratos_recorrentes FOR ALL
+      USING (true)
+      WITH CHECK (true);
+  END IF;
+END $$;
+
