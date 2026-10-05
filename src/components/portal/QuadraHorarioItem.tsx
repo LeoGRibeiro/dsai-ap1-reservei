@@ -53,6 +53,7 @@ export function QuadraHorarioItem({
       </div>
 
       <HorarioGrid
+        quadraId={quadra.id}
         dataSelecionada={dataSelecionada}
         horariosSelecionados={horariosSelecionados}
         horariosOcupados={horariosOcupados}

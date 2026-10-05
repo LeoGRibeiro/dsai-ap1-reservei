@@ -13,6 +13,7 @@ import { CarrinhoLateral, BotaoCarrinhoMobile } from "./CarrinhoLateral";
 import { FormularioIdentificacao, type DadosIdentificacao } from "./FormularioIdentificacao";
 import { ModalPix } from "./ModalPix";
 import { ModalPosReservaCadastro } from "./ModalPosReservaCadastro";
+import { MuralVagasAbertas } from "@/components/vagas/MuralVagasAbertas";
 
 import { useReservasService } from "@/hooks/useReservasService";
 import { useContratosService } from "@/hooks/useContratosService";
@@ -345,13 +346,21 @@ export function PortalCliente() {
                 />
               );
             })}
+
+            {/* Mural de Vagas Abertas (Versão Mobile) */}
+            <div className="md:hidden pt-4">
+              <MuralVagasAbertas />
+            </div>
           </main>
 
-          {/* Coluna direita: carrinho (desktop / tablet) */}
-          <aside className="hidden md:block sticky top-24">
+          {/* Coluna direita: carrinho (desktop / tablet) e Mural de Vagas */}
+          <aside className="hidden md:block sticky top-24 space-y-6">
             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 min-h-[400px] flex flex-col">
               {carrinhoContent}
             </div>
+
+            {/* Mural de Vagas Abertas posicionado abaixo do carrinho */}
+            <MuralVagasAbertas />
           </aside>
         </div>
 
