@@ -7,9 +7,13 @@ import { saoConsecutivos, isHorarioExpirado } from "@/lib/constants";
 import { toast } from "sonner";
 import { type AvisoEscolinha } from "@/lib/recorrencia/agenda";
 import { ModalEscolinha } from "./ModalEscolinha";
-import { GraduationCap } from "lucide-react";
+import { GraduationCap, Users } from "lucide-react";
+import { useVagasService } from "@/hooks/useVagasService";
+import { ModalConfirmarInteresse } from "@/components/vagas/ModalConfirmarInteresse";
+import type { VagaDisponivelItem } from "@/lib/vagas/types";
 
 interface Props {
+  quadraId?: string;
   dataSelecionada: string;
   horariosSelecionados: string[]; // slots selecionados NESTA quadra
   horariosOcupados: string[];     // slots já reservados (persistidos)
@@ -40,6 +44,7 @@ function getFaixa(hora: number): "MANHA" | "TARDE" | "NOITE" {
 // ─── Componente ───────────────────────────────────────────────────────────────
 
 export function HorarioGrid({
+  quadraId,
   dataSelecionada,
   horariosSelecionados,
   horariosOcupados,
@@ -48,14 +53,26 @@ export function HorarioGrid({
 }: Props) {
   const [isMounted, setIsMounted] = useState(false);
   const [avisoSelecionado, setAvisoSelecionado] = useState<AvisoEscolinha | null>(null);
+  const [vagaSelecionada, setVagaSelecionada] = useState<VagaDisponivelItem | null>(null);
+  const { vagasDisponiveis } = useVagasService();
 
   useEffect(() => {
     setIsMounted(true);
   }, []);
 
-  const handleClick = (horario: string, isEscolinha: boolean, aviso?: AvisoEscolinha) => {
+  const handleClick = (
+    horario: string,
+    isEscolinha: boolean,
+    aviso?: AvisoEscolinha,
+    vaga?: VagaDisponivelItem
+  ) => {
     if (isEscolinha && aviso) {
       setAvisoSelecionado(aviso);
+      return;
+    }
+
+    if (vaga) {
+      setVagaSelecionada(vaga);
       return;
     }
 
@@ -113,7 +130,7 @@ export function HorarioGrid({
             </span>
           </div>
 
-          {/* ── Cards de horário com status superior (Disponível / Escolinha) ── */}
+          {/* ── Cards de horário com status superior (Disponível / Escolinha / Vagas Abertas) ── */}
           <div className="flex flex-wrap gap-2">
             {horarios.map((horario) => {
               const hora = parseInt(horario.split(":")[0], 10);
@@ -123,19 +140,34 @@ export function HorarioGrid({
               const aviso = avisosEscolinha.find((a) => a.horarios.includes(horario));
               const isEscolinha = isOcupado && !!aviso;
 
+              // Verifica se este horário ocupado possui vagas abertas pelo organizador
+              const vagaAberta = isOcupado
+                ? vagasDisponiveis.find(
+                    (v) =>
+                      v.data === dataSelecionada &&
+                      (!quadraId || v.quadraId === quadraId) &&
+                      horario >= v.horaInicio &&
+                      horario < v.horaFim &&
+                      v.vagasAbertas > 0
+                  )
+                : undefined;
+              const isVagaAberta = isOcupado && !!vagaAberta;
+
               const expiradoParaSelecao = isMounted
                 ? isHorarioExpirado(dataSelecionada, horario, 10)
                 : false;
-              const isDisabled = (isOcupado && !isEscolinha) || expiradoParaSelecao;
+              const isDisabled = (isOcupado && !isEscolinha && !isVagaAberta) || expiradoParaSelecao;
 
               return (
                 <button
                   key={horario}
-                  onClick={() => handleClick(horario, isEscolinha, aviso)}
+                  onClick={() => handleClick(horario, isEscolinha, aviso, vagaAberta)}
                   disabled={isDisabled}
                   title={
                     isEscolinha
                       ? `${aviso?.nome ? `${aviso.nome} (${aviso.esporte || "Escolinha"})` : "Escolinha"} – Clique para ver detalhes`
+                      : isVagaAberta
+                      ? `Partida com ${vagaAberta.vagasAbertas} vaga(s) aberta(s) – Clique para solicitar participação`
                       : isOcupado
                       ? "Horário ocupado"
                       : expiradoParaSelecao
@@ -148,6 +180,8 @@ export function HorarioGrid({
                       ? "bg-emerald-500/25 border-emerald-500 text-emerald-300 shadow-sm"
                       : isEscolinha
                       ? "bg-violet-500/15 border-violet-500/40 text-violet-200 hover:bg-violet-500/25 cursor-pointer ring-1 ring-violet-500/20"
+                      : isVagaAberta
+                      ? "bg-slate-900 border-emerald-500/40 text-slate-200 hover:bg-slate-850 hover:border-emerald-400 cursor-pointer ring-1 ring-emerald-500/20"
                       : isDisabled
                       ? "bg-slate-900/40 border-slate-800 text-slate-700 cursor-not-allowed line-through"
                       : "bg-slate-800/50 border-slate-700 text-slate-300 hover:bg-slate-700 hover:border-slate-600 active:scale-95"
@@ -156,11 +190,13 @@ export function HorarioGrid({
                   {/* Linha superior: Categoria / Status */}
                   <span
                     className={cn(
-                      "text-xs font-semibold leading-tight flex items-center gap-1",
+                      "text-xs font-semibold leading-tight flex items-center gap-1.5",
                       isSelecionado
                         ? "text-emerald-400"
                         : isEscolinha
                         ? "text-violet-300"
+                        : isVagaAberta
+                        ? "text-slate-400"
                         : isDisabled
                         ? "text-slate-600"
                         : "text-emerald-400/80"
@@ -175,8 +211,20 @@ export function HorarioGrid({
                         </span>
                         <GraduationCap className="w-3.5 h-3.5 text-violet-400 flex-shrink-0" />
                       </>
+                    ) : isOcupado ? (
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className={isVagaAberta ? "text-slate-500 line-through" : ""}>
+                          Ocupado
+                        </span>
+                        {isVagaAberta && (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/35 tracking-tight not-line-through">
+                            <Users className="w-2.5 h-2.5" />
+                            vagas abertas
+                          </span>
+                        )}
+                      </div>
                     ) : isDisabled ? (
-                      expiradoParaSelecao ? "Indisponível" : "Ocupado"
+                      "Indisponível"
                     ) : (
                       "Disponível"
                     )}
@@ -190,6 +238,8 @@ export function HorarioGrid({
                         ? "text-emerald-200"
                         : isEscolinha
                         ? "text-violet-100"
+                        : isVagaAberta
+                        ? "text-white"
                         : isDisabled
                         ? "text-slate-600"
                         : "text-white"
@@ -239,7 +289,15 @@ export function HorarioGrid({
         </div>
       )}
 
+      {/* Modal de Detalhes da Escolinha */}
       <ModalEscolinha aviso={avisoSelecionado} onClose={() => setAvisoSelecionado(null)} />
+
+      {/* Modal de Confirmação de Interesse em Vaga Aberta */}
+      <ModalConfirmarInteresse
+        open={Boolean(vagaSelecionada)}
+        vaga={vagaSelecionada}
+        onClose={() => setVagaSelecionada(null)}
+      />
     </div>
   );
 }

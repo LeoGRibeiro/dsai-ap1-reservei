@@ -37,6 +37,10 @@ export interface ReservaDbRow {
   contrato_id?: string | null;
   tipo_reserva?: string | null;
   aviso_cancelamento_em?: string | null;
+  permite_vagas?: boolean | null;
+  permiteVagas?: boolean | null;
+  vagas_abertas?: number | null;
+  vagasAbertas?: number | null;
 }
 
 /**
@@ -103,6 +107,14 @@ export function rowToReserva(row: ReservaDbRow): Reserva {
     avisoCancelamentoEm: row.aviso_cancelamento_em
       ? String(row.aviso_cancelamento_em).split("T")[0]
       : undefined,
+    permiteVagas:
+      row.permite_vagas !== undefined || row.permiteVagas !== undefined
+        ? Boolean(row.permite_vagas ?? row.permiteVagas)
+        : undefined,
+    vagasAbertas:
+      row.vagas_abertas !== undefined || row.vagasAbertas !== undefined
+        ? Number(row.vagas_abertas ?? row.vagasAbertas)
+        : undefined,
   };
 }
 
@@ -145,6 +157,12 @@ export function reservaToRow(reserva: Partial<Reserva>): Record<string, unknown>
   if (reserva.tipoReserva !== undefined) row.tipo_reserva = reserva.tipoReserva ?? null;
   if (reserva.avisoCancelamentoEm !== undefined) {
     row.aviso_cancelamento_em = reserva.avisoCancelamentoEm ?? null;
+  }
+  if (reserva.permiteVagas !== undefined) {
+    row.permite_vagas = reserva.permiteVagas;
+  }
+  if (reserva.vagasAbertas !== undefined) {
+    row.vagas_abertas = reserva.vagasAbertas;
   }
 
   return row;

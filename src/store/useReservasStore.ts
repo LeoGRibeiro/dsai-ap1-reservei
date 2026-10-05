@@ -55,6 +55,10 @@ export interface Reserva {
   tipoReserva?: TipoReserva;
   /** Data (YYYY-MM-DD) em que o grupo avisou o cancelamento; null limpa o aviso no banco */
   avisoCancelamentoEm?: string | null;
+
+  // Sistema de Vagas Abertas para jogadores
+  permiteVagas?: boolean;
+  vagasAbertas?: number;
 }
 
 // ─── State & Actions ──────────────────────────────────────────────────────────
