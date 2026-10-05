@@ -20,6 +20,7 @@ import {
 import type { Esporte } from "@/lib/quadras";
 import {
   fetchReservasSupabase,
+  fetchReservasPorMesSupabase,
   inserirReservaSupabase,
   atualizarReservaSupabase,
   removerReservaSupabase,
@@ -30,6 +31,17 @@ import {
   listarUsuariosCadastrados,
   getTelefonesCadastradosLocal,
 } from "@/lib/supabase/authService";
+import {
+  construirBloqueio,
+  construirReservaManual,
+  validarConflitoBloqueio,
+  validarReservaManual,
+} from "@/lib/adminAgenda/adminAgendaService";
+import type {
+  DadosCriacaoBloqueio,
+  DadosCriacaoReservaManual,
+  ResultadoOperacaoAgenda,
+} from "@/lib/adminAgenda/types";
 
 // ─── Tipos de entrada para criação ───────────────────────────────────────────
 
@@ -90,8 +102,8 @@ export function useReservasService() {
   useEffect(() => {
     let isMounted = true;
 
-    // Busca dados do Supabase na inicialização
-    if (isSupabaseConfigured()) {
+    // Busca dados do Supabase na inicialização apenas se ainda não carregados
+    if (isSupabaseConfigured() && !useReservasStore.getState().isLoadedFromDb) {
       fetchReservasSupabase().then(async (dados) => {
         if (isMounted && dados) {
           const enriquecidos = await enriquecerReservasComUsuarios(dados);
@@ -134,7 +146,7 @@ export function useReservasService() {
         }
       }
     };
-  }, [isLoadedFromDb, setReservas]);
+  }, [setReservas]);
 
   // ── Queries ────────────────────────────────────────────────────────────────
 
@@ -380,6 +392,111 @@ export function useReservasService() {
     []
   );
 
+  /**
+   * Admin: Carrega reservas de um mês específico sob demanda (Lazy Loading).
+   */
+  const carregarReservasDoMes = useCallback(
+    async (ano: number, mes: number) => {
+      if (!isSupabaseConfigured()) return;
+      try {
+        const dados = await fetchReservasPorMesSupabase(ano, mes);
+        if (dados && dados.length > 0) {
+          const enriquecidos = await enriquecerReservasComUsuarios(dados);
+          for (const item of enriquecidos) {
+            adicionarReserva(item);
+          }
+        }
+      } catch (err) {
+        console.error(`[useReservasService] Erro ao carregar mês ${mes}/${ano}:`, err);
+      }
+    },
+    [adicionarReserva]
+  );
+
+  /**
+   * Admin: Criação de reserva manual no balcão com controle de pagamento e destaque visual.
+   */
+  const criarReservaManual = useCallback(
+    async (dados: DadosCriacaoReservaManual): Promise<ResultadoOperacaoAgenda> => {
+      const validacao = validarReservaManual(dados, reservas);
+      if (!validacao.valido) {
+        return {
+          ok: false,
+          motivo: validacao.erros[0] ?? "Dados inválidos.",
+          conflitoCom: validacao.conflitoCom,
+        };
+      }
+
+      const novaReserva = construirReservaManual(dados);
+
+      // Atualização otimista no estado local
+      adicionarReserva(novaReserva);
+
+      // Persistência assíncrona no Supabase
+      void inserirReservaSupabase(novaReserva);
+
+      return {
+        ok: true,
+        reserva: novaReserva,
+      };
+    },
+    [adicionarReserva, reservas]
+  );
+
+  /**
+   * Admin: Bloqueia horários para manutenção ou evento interno.
+   * Impede a operação se já houver reserva no horário.
+   */
+  const criarBloqueio = useCallback(
+    async (dados: DadosCriacaoBloqueio): Promise<ResultadoOperacaoAgenda> => {
+      const validacao = validarConflitoBloqueio(
+        dados.quadraId,
+        dados.data,
+        dados.horarios,
+        reservas
+      );
+
+      if (!validacao.valido) {
+        return {
+          ok: false,
+          motivo: validacao.motivo ?? "Conflito de horário detectado.",
+          conflitoCom: validacao.conflitoCom,
+        };
+      }
+
+      const novoBloqueio = construirBloqueio(dados);
+
+      // Atualização otimista no estado local
+      adicionarReserva(novoBloqueio);
+
+      // Persistência assíncrona no Supabase
+      void inserirReservaSupabase(novoBloqueio);
+
+      return {
+        ok: true,
+        reserva: novoBloqueio,
+      };
+    },
+    [adicionarReserva, reservas]
+  );
+
+  /**
+   * Admin: Remove um bloqueio de horário (desbloqueia).
+   */
+  const removerBloqueio = useCallback(
+    async (bloqueioId: string): Promise<boolean> => {
+      const item = getReservaById(bloqueioId);
+      if (!item || item.tipoReserva !== "manutencao_bloqueio") {
+        return false;
+      }
+
+      removerReserva(bloqueioId);
+      void removerReservaSupabase(bloqueioId);
+      return true;
+    },
+    [getReservaById, removerReserva]
+  );
+
   return {
     // Queries
     reservas,
@@ -402,5 +519,11 @@ export function useReservasService() {
     recarregarReservas,
     vincularReservaAoUsuario,
     getReservasDoUsuario,
+
+    // Admin Agenda Mutations & Lazy Loading
+    carregarReservasDoMes,
+    criarReservaManual,
+    criarBloqueio,
+    removerBloqueio,
   };
 }

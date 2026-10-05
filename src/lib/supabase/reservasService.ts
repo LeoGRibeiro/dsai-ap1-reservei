@@ -31,6 +31,50 @@ export async function fetchReservasSupabase(): Promise<Reserva[] | null> {
 }
 
 /**
+ * Busca reservas de um determinado mês e ano no Supabase (Lazy Loading).
+ * @param ano Ano com 4 dígitos (ex.: 2026)
+ * @param mes Mês de 1 a 12 (ex.: 10 para Outubro)
+ * @returns Lista de reservas do mês ou null em caso de erro/não configurado.
+ */
+export async function fetchReservasPorMesSupabase(
+  ano: number,
+  mes: number
+): Promise<Reserva[] | null> {
+  if (!isSupabaseConfigured()) {
+    return null;
+  }
+
+  try {
+    const ultimoDia = new Date(ano, mes, 0).getDate();
+    const dataInicio = `${ano}-${String(mes).padStart(2, "0")}-01`;
+    const dataFim = `${ano}-${String(mes).padStart(2, "0")}-${String(ultimoDia).padStart(2, "0")}`;
+
+    const { data, error } = await supabase
+      .from(TABELA_RESERVAS)
+      .select("*")
+      .gte("data", dataInicio)
+      .lte("data", dataFim)
+      .order("data", { ascending: true });
+
+    if (error) {
+      console.error(
+        `[Supabase] Erro ao carregar reservas do mês ${mes}/${ano}:`,
+        error.message
+      );
+      return null;
+    }
+
+    return (data as ReservaDbRow[]).map(rowToReserva);
+  } catch (err) {
+    console.error(
+      `[Supabase] Falha inesperada ao buscar reservas do mês ${mes}/${ano}:`,
+      err
+    );
+    return null;
+  }
+}
+
+/**
  * Insere uma nova reserva no banco de dados Supabase.
  */
 export async function inserirReservaSupabase(reserva: Reserva): Promise<boolean> {
@@ -196,8 +240,21 @@ export function subscreverReservasSupabase(
     return () => {};
   }
 
+  // Remove qualquer canal anterior com mesmo prefixo para evitar conflito de callbacks após subscribe
+  try {
+    const canaisExistentes = supabase.getChannels();
+    for (const c of canaisExistentes) {
+      if (c.topic.includes("mudancas-reservas-realtime")) {
+        void supabase.removeChannel(c);
+      }
+    }
+  } catch (err) {
+    console.warn("[Supabase] Aviso ao limpar canais anteriores:", err);
+  }
+
+  const canalId = `mudancas-reservas-realtime-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
   const canal = supabase
-    .channel("mudancas-reservas-realtime")
+    .channel(canalId)
     .on(
       "postgres_changes",
       {
@@ -239,6 +296,6 @@ export function subscreverReservasSupabase(
     .subscribe();
 
   return () => {
-    supabase.removeChannel(canal);
+    void supabase.removeChannel(canal);
   };
 }
