@@ -373,6 +373,17 @@ export function useReservasService() {
     [atualizarReserva]
   );
 
+  /**
+   * Atualiza as configurações de vagas abertas de uma reserva (abrir, fechar ou alterar quantidade).
+   */
+  const atualizarVagasReserva = useCallback(
+    (reservaId: string, permiteVagas: boolean, vagasAbertas: number) => {
+      atualizarReserva(reservaId, { permiteVagas, vagasAbertas });
+      void atualizarReservaSupabase(reservaId, { permiteVagas, vagasAbertas });
+    },
+    [atualizarReserva]
+  );
+
   /** Retorna todas as reservas de um usuário específico */
   const getReservasDoUsuario = useCallback(
     (userId: string): Reserva[] => {
@@ -519,6 +530,7 @@ export function useReservasService() {
     recarregarReservas,
     vincularReservaAoUsuario,
     getReservasDoUsuario,
+    atualizarVagasReserva,
 
     // Admin Agenda Mutations & Lazy Loading
     carregarReservasDoMes,

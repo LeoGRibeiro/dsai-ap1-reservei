@@ -177,6 +177,44 @@ BEGIN
       ON public.contratos_recorrentes FOR ALL
       USING (true)
       WITH CHECK (true);
+END $$;
+
+-- ==============================================================================
+-- Sistema de Vagas Abertas para Jogadores
+-- Spec: SPEC/2026-10-05-sistema-vagas-jogadores.md
+-- ==============================================================================
+
+-- 1. Colunas adicionais na tabela 'reservas'
+ALTER TABLE public.reservas ADD COLUMN IF NOT EXISTS permite_vagas BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.reservas ADD COLUMN IF NOT EXISTS vagas_abertas INTEGER DEFAULT 0;
+
+-- 2. Tabela de Interesses de Vagas
+CREATE TABLE IF NOT EXISTS public.interesses_vagas (
+  id TEXT PRIMARY KEY,
+  reserva_id TEXT NOT NULL REFERENCES public.reservas(id) ON DELETE CASCADE,
+  usuario_id TEXT NOT NULL,
+  nome_usuario TEXT NOT NULL DEFAULT '',
+  telefone_usuario TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'pendente',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Índices para consultas otimizadas
+CREATE INDEX IF NOT EXISTS idx_interesses_reserva ON public.interesses_vagas (reserva_id);
+CREATE INDEX IF NOT EXISTS idx_interesses_usuario ON public.interesses_vagas (usuario_id);
+
+-- Habilitar Row Level Security (RLS)
+ALTER TABLE public.interesses_vagas ENABLE ROW LEVEL SECURITY;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE tablename = 'interesses_vagas' AND policyname = 'Permitir acesso completo a interesses_vagas'
+  ) THEN
+    CREATE POLICY "Permitir acesso completo a interesses_vagas"
+      ON public.interesses_vagas FOR ALL
+      USING (true)
+      WITH CHECK (true);
   END IF;
 END $$;
 
