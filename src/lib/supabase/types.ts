@@ -1,5 +1,6 @@
 import type { Reserva, StatusReserva, StatusWhatsApp } from "@/store/useReservasStore";
 import type { Esporte } from "@/lib/quadras";
+import type { TipoReserva } from "@/lib/recorrencia/types";
 
 export interface ReservaDbRow {
   id: string;
@@ -33,6 +34,9 @@ export interface ReservaDbRow {
   criadaEm?: string;
   esporte?: string | null;
   observacoes?: string | null;
+  contrato_id?: string | null;
+  tipo_reserva?: string | null;
+  aviso_cancelamento_em?: string | null;
 }
 
 /**
@@ -94,6 +98,11 @@ export function rowToReserva(row: ReservaDbRow): Reserva {
     criadaEm: row.criada_em ?? row.criadaEm ?? new Date().toISOString(),
     esporte: (row.esporte as Esporte) || undefined,
     observacoes: row.observacoes || undefined,
+    contratoId: row.contrato_id || undefined,
+    tipoReserva: (row.tipo_reserva as TipoReserva) || undefined,
+    avisoCancelamentoEm: row.aviso_cancelamento_em
+      ? String(row.aviso_cancelamento_em).split("T")[0]
+      : undefined,
   };
 }
 
@@ -132,6 +141,11 @@ export function reservaToRow(reserva: Partial<Reserva>): Record<string, unknown>
   if (reserva.criadaEm !== undefined) row.criada_em = reserva.criadaEm;
   if (reserva.esporte !== undefined) row.esporte = reserva.esporte ?? null;
   if (reserva.observacoes !== undefined) row.observacoes = reserva.observacoes ?? null;
+  if (reserva.contratoId !== undefined) row.contrato_id = reserva.contratoId ?? null;
+  if (reserva.tipoReserva !== undefined) row.tipo_reserva = reserva.tipoReserva ?? null;
+  if (reserva.avisoCancelamentoEm !== undefined) {
+    row.aviso_cancelamento_em = reserva.avisoCancelamentoEm ?? null;
+  }
 
   return row;
 }

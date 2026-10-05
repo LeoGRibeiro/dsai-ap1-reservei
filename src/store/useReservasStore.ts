@@ -8,6 +8,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { Esporte } from "@/lib/quadras";
+import type { TipoReserva } from "@/lib/recorrencia/types";
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -48,6 +49,12 @@ export interface Reserva {
   // Opcionais
   esporte?: Esporte;
   observacoes?: string;
+
+  // Reservas recorrentes (escolinhas e grupos). Reservas avulsas deixam em branco.
+  contratoId?: string;
+  tipoReserva?: TipoReserva;
+  /** Data (YYYY-MM-DD) em que o grupo avisou o cancelamento; null limpa o aviso no banco */
+  avisoCancelamentoEm?: string | null;
 }
 
 // ─── State & Actions ──────────────────────────────────────────────────────────

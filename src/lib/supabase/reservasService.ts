@@ -62,6 +62,58 @@ export async function inserirReservaSupabase(reserva: Reserva): Promise<boolean>
 }
 
 /**
+ * Insere várias reservas de uma só vez (ocorrências de um contrato recorrente).
+ * Usa upsert por id para ser idempotente caso a geração seja repetida.
+ */
+export async function inserirReservasEmLoteSupabase(reservas: Reserva[]): Promise<boolean> {
+  if (!isSupabaseConfigured() || reservas.length === 0) {
+    return false;
+  }
+
+  try {
+    const rows = reservas.map((r) => reservaToRow(r));
+    const { error } = await supabase
+      .from(TABELA_RESERVAS)
+      .upsert(rows, { onConflict: "id" });
+
+    if (error) {
+      console.error("[Supabase] Erro ao inserir reservas em lote:", error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error("[Supabase] Falha inesperada ao inserir reservas em lote:", err);
+    return false;
+  }
+}
+
+/** Aplica o mesmo update a várias reservas (ex.: encerrar contrato → cancelar futuras). */
+export async function atualizarReservasEmLoteSupabase(
+  ids: string[],
+  dados: Partial<Reserva>
+): Promise<boolean> {
+  if (!isSupabaseConfigured() || ids.length === 0) {
+    return false;
+  }
+
+  try {
+    const { error } = await supabase
+      .from(TABELA_RESERVAS)
+      .update(reservaToRow(dados))
+      .in("id", ids);
+
+    if (error) {
+      console.error("[Supabase] Erro ao atualizar reservas em lote:", error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error("[Supabase] Falha inesperada ao atualizar reservas em lote:", err);
+    return false;
+  }
+}
+
+/**
  * Atualiza campos de uma reserva existente no Supabase.
  */
 export async function atualizarReservaSupabase(

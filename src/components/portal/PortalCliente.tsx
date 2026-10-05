@@ -15,6 +15,7 @@ import { ModalPix } from "./ModalPix";
 import { ModalPosReservaCadastro } from "./ModalPosReservaCadastro";
 
 import { useReservasService } from "@/hooks/useReservasService";
+import { useContratosService } from "@/hooks/useContratosService";
 import { useUserAuth } from "@/hooks/useUserAuth";
 import {
   gerarDiasDisponiveis,
@@ -60,6 +61,7 @@ export function PortalCliente() {
     confirmarPagamento,
     liberarLock,
   } = useReservasService();
+  const { getAvisosEscolinha } = useContratosService();
 
   // ── Valores calculados ──────────────────────────────────────────────────
   const valorTotal = useMemo(
@@ -337,6 +339,7 @@ export function PortalCliente() {
                   dataSelecionada={dataSelecionada}
                   horariosSelecionados={isAtiva ? horariosSelecionados : []}
                   horariosOcupados={horariosOcupados}
+                  avisosEscolinha={getAvisosEscolinha(dataSelecionada, quadra.id)}
                   isAtiva={isAtiva}
                   onToggleHorario={handleToggleHorario}
                 />

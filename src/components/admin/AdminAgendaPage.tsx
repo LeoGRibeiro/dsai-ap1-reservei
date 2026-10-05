@@ -180,7 +180,9 @@ function BlocoReserva({
               const telDigits = reserva.whatsappCliente ? reserva.whatsappCliente.replace(/\D/g, "") : "";
               const isMembro = Boolean(reserva.userId || (telDigits && getTelefonesCadastradosLocal().has(telDigits)));
               return isMembro ? "⭐ " : "";
-            })()}{reserva.nomeCliente || "—"}
+            })()}
+            {reserva.tipoReserva === "escolinha" ? "🎓 " : reserva.tipoReserva === "grupo" ? "🔁 " : ""}
+            {reserva.nomeCliente || "—"}
           </p>
           {eAtivo && (
             <span className="flex items-center gap-0.5 text-[9px] font-mono text-emerald-400 flex-shrink-0">

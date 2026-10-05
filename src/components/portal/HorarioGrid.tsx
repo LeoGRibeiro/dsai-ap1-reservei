@@ -5,11 +5,15 @@ import { cn } from "@/lib/utils";
 import { HORARIOS_DISPONIVEIS } from "@/lib/quadras";
 import { saoConsecutivos, isHorarioExpirado } from "@/lib/constants";
 import { toast } from "sonner";
+import { type AvisoEscolinha } from "@/lib/recorrencia/agenda";
+import { ModalEscolinha } from "./ModalEscolinha";
+import { GraduationCap } from "lucide-react";
 
 interface Props {
   dataSelecionada: string;
   horariosSelecionados: string[]; // slots selecionados NESTA quadra
   horariosOcupados: string[];     // slots já reservados (persistidos)
+  avisosEscolinha?: AvisoEscolinha[]; // avisos de escolinha na data/quadra
   onToggleHorario: (horario: string) => void;
 }
 
@@ -39,15 +43,22 @@ export function HorarioGrid({
   dataSelecionada,
   horariosSelecionados,
   horariosOcupados,
+  avisosEscolinha = [],
   onToggleHorario,
 }: Props) {
   const [isMounted, setIsMounted] = useState(false);
+  const [avisoSelecionado, setAvisoSelecionado] = useState<AvisoEscolinha | null>(null);
 
   useEffect(() => {
     setIsMounted(true);
   }, []);
 
-  const handleClick = (horario: string) => {
+  const handleClick = (horario: string, isEscolinha: boolean, aviso?: AvisoEscolinha) => {
+    if (isEscolinha && aviso) {
+      setAvisoSelecionado(aviso);
+      return;
+    }
+
     if (horariosOcupados.includes(horario)) return;
     if (isHorarioExpirado(dataSelecionada, horario, 10)) return;
 
@@ -76,12 +87,21 @@ export function HorarioGrid({
     grupos[grupos.length - 1].horarios.push(h);
   }
 
+  // Deduplicar avisos pelo contratoId (ou nome + início) para exibição na legenda
+  const avisosUnicos = avisosEscolinha.filter(
+    (aviso, index, self) =>
+      index ===
+      self.findIndex((a) =>
+        a.contratoId ? a.contratoId === aviso.contratoId : a.nome === aviso.nome && a.horaInicio === aviso.horaInicio
+      )
+  );
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-3.5">
       {grupos.map(({ faixa, horarios }) => (
         <div key={faixa}>
           {/* ── Label da faixa ── */}
-          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 mb-2.5">
+          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 mb-2">
             <span className={cn("text-xs font-bold uppercase tracking-wider", FAIXA[faixa].cor)}>
               {FAIXA[faixa].label}
             </span>
@@ -93,46 +113,133 @@ export function HorarioGrid({
             </span>
           </div>
 
-          {/* ── Chips de horário ── */}
+          {/* ── Cards de horário com status superior (Disponível / Escolinha) ── */}
           <div className="flex flex-wrap gap-2">
             {horarios.map((horario) => {
               const hora = parseInt(horario.split(":")[0], 10);
+              const horaFim = String(hora + 1).padStart(2, "0") + ":00";
               const isSelecionado = horariosSelecionados.includes(horario);
               const isOcupado = horariosOcupados.includes(horario);
+              const aviso = avisosEscolinha.find((a) => a.horarios.includes(horario));
+              const isEscolinha = isOcupado && !!aviso;
+
               const expiradoParaSelecao = isMounted
                 ? isHorarioExpirado(dataSelecionada, horario, 10)
                 : false;
-              const isDisabled = isOcupado || expiradoParaSelecao;
+              const isDisabled = (isOcupado && !isEscolinha) || expiradoParaSelecao;
 
               return (
                 <button
                   key={horario}
-                  onClick={() => handleClick(horario)}
+                  onClick={() => handleClick(horario, isEscolinha, aviso)}
                   disabled={isDisabled}
                   title={
-                    isOcupado
+                    isEscolinha
+                      ? `${aviso?.nome ? `${aviso.nome} (${aviso.esporte || "Escolinha"})` : "Escolinha"} – Clique para ver detalhes`
+                      : isOcupado
                       ? "Horário ocupado"
                       : expiradoParaSelecao
                       ? "Horário indisponível"
-                      : `${horario} – ${String(hora + 1).padStart(2, "0")}:00`
+                      : `${horario} – ${horaFim}`
                   }
                   className={cn(
-                    "px-3 py-1.5 rounded-xl border text-xs font-semibold transition-all duration-150 select-none",
+                    "flex flex-col items-start justify-center px-3.5 py-2 rounded-xl border text-left transition-all duration-150 select-none min-w-[115px]",
                     isSelecionado
                       ? "bg-emerald-500/25 border-emerald-500 text-emerald-300 shadow-sm"
+                      : isEscolinha
+                      ? "bg-violet-500/15 border-violet-500/40 text-violet-200 hover:bg-violet-500/25 cursor-pointer ring-1 ring-violet-500/20"
                       : isDisabled
                       ? "bg-slate-900/40 border-slate-800 text-slate-700 cursor-not-allowed line-through"
                       : "bg-slate-800/50 border-slate-700 text-slate-300 hover:bg-slate-700 hover:border-slate-600 active:scale-95"
                   )}
                 >
-                  {isSelecionado ? "✓ " : ""}
-                  {horario}
+                  {/* Linha superior: Categoria / Status */}
+                  <span
+                    className={cn(
+                      "text-xs font-semibold leading-tight flex items-center gap-1",
+                      isSelecionado
+                        ? "text-emerald-400"
+                        : isEscolinha
+                        ? "text-violet-300"
+                        : isDisabled
+                        ? "text-slate-600"
+                        : "text-emerald-400/80"
+                    )}
+                  >
+                    {isSelecionado ? (
+                      "✓ Selecionado"
+                    ) : isEscolinha ? (
+                      <>
+                        <span className="truncate max-w-[95px]">
+                          {aviso?.esporte ? `Esc. ${aviso.esporte}` : "Escolinha"}
+                        </span>
+                        <GraduationCap className="w-3.5 h-3.5 text-violet-400 flex-shrink-0" />
+                      </>
+                    ) : isDisabled ? (
+                      expiradoParaSelecao ? "Indisponível" : "Ocupado"
+                    ) : (
+                      "Disponível"
+                    )}
+                  </span>
+
+                  {/* Linha inferior: Intervalo de horário */}
+                  <span
+                    className={cn(
+                      "text-sm font-bold leading-tight mt-0.5 whitespace-nowrap",
+                      isSelecionado
+                        ? "text-emerald-200"
+                        : isEscolinha
+                        ? "text-violet-100"
+                        : isDisabled
+                        ? "text-slate-600"
+                        : "text-white"
+                    )}
+                  >
+                    {horario} – {horaFim}
+                  </span>
                 </button>
               );
             })}
           </div>
         </div>
       ))}
+
+      {/* ── Legenda compacta de Escolinhas presentes na quadra (embaixo, sem esticar) ── */}
+      {avisosUnicos.length > 0 && (
+        <div className="pt-2 flex flex-wrap gap-2">
+          {avisosUnicos.map((aviso, idx) => (
+            <button
+              key={aviso.contratoId || idx}
+              type="button"
+              onClick={() => setAvisoSelecionado(aviso)}
+              className="inline-flex items-center gap-2.5 px-3 py-1.5 rounded-xl bg-violet-950/30 border border-violet-500/30 hover:border-violet-500/60 hover:bg-violet-900/40 transition-all duration-150 group cursor-pointer text-left w-fit"
+            >
+              <div className="w-5 h-5 rounded-md bg-violet-500/20 border border-violet-500/30 flex items-center justify-center flex-shrink-0">
+                <GraduationCap className="w-3 h-3 text-violet-400" />
+              </div>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="font-semibold text-white text-xs">
+                  {aviso.nome}
+                </span>
+                {aviso.esporte && (
+                  <span className="text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded bg-violet-500/25 text-violet-300 border border-violet-500/30">
+                    {aviso.esporte}
+                  </span>
+                )}
+                <span className="text-[11px] text-violet-300/80 font-medium">
+                  · {aviso.horaInicio} às {aviso.horaFim}
+                </span>
+              </div>
+
+              <span className="text-[11px] font-medium text-violet-400 group-hover:text-violet-200 transition-colors whitespace-nowrap flex items-center gap-0.5 ml-1">
+                Ver detalhes <span className="text-xs group-hover:translate-x-0.5 transition-transform">→</span>
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      <ModalEscolinha aviso={avisoSelecionado} onClose={() => setAvisoSelecionado(null)} />
     </div>
   );
 }
