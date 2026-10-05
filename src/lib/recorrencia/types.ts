@@ -26,8 +26,12 @@ export const DIAS_SEMANA: ReadonlyArray<{ valor: DiaSemana; curto: string; longo
   { valor: 6, curto: "Sáb", longo: "Sábado" },
 ];
 
-/** Tipo de uma reserva na agenda: avulsa (portal) ou gerada por um contrato */
-export type TipoReserva = "avulsa" | TipoContrato;
+/** Tipo de uma reserva na agenda: avulsa (portal), recorrente (escolinha/grupo), manual de admin ou bloqueio */
+export type TipoReserva =
+  | "avulsa"
+  | TipoContrato
+  | "admin_manual"
+  | "manutencao_bloqueio";
 
 export interface ContratoRecorrente {
   id: string;

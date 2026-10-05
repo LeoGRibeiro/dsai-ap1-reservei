@@ -29,8 +29,12 @@ import {
   Send,
   Shield,
   Sparkles,
+  ShieldCheck,
+  Wrench,
 } from "lucide-react";
 import { useReservasStore } from "@/store/useReservasStore";
+import { useReservasService } from "@/hooks/useReservasService";
+import { toast } from "sonner";
 import { useAdminAuth } from "@/hooks/useAdminAuth";
 import { formatarMoeda, formatarDataExibicao } from "@/lib/constants";
 import { PREPARACAO_POR_ESPORTE } from "@/lib/quadras";
@@ -244,6 +248,14 @@ export function AdminReservaDetalhes({ reservaId }: { reservaId: string }) {
   const router = useRouter();
   const { autenticado } = useAdminAuth();
   const reservas = useReservasStore((s) => s.reservas);
+  const { confirmarPagamentoRestante } = useReservasService();
+
+  function handleMarcarComoPago() {
+    confirmarPagamentoRestante(reservaId);
+    toast.success("Pagamento confirmado com sucesso!", {
+      description: "A reserva foi marcada como paga integralmente.",
+    });
+  }
 
   // Proteção: redireciona para login se não autenticado
   useEffect(() => {
@@ -361,6 +373,18 @@ export function AdminReservaDetalhes({ reservaId }: { reservaId: string }) {
             {reserva.esporte && (
               <span className="px-3 py-1 bg-emerald-500/10 border border-emerald-500/20 rounded-full text-sm text-emerald-400">
                 {reserva.esporte}
+              </span>
+            )}
+            {reserva.tipoReserva === "admin_manual" && (
+              <span className="px-3 py-1 bg-sky-500/10 border border-sky-500/20 rounded-full text-sm text-sky-400 flex items-center gap-1.5 font-medium">
+                <ShieldCheck className="w-3.5 h-3.5" />
+                Reserva Manual (Admin)
+              </span>
+            )}
+            {reserva.tipoReserva === "manutencao_bloqueio" && (
+              <span className="px-3 py-1 bg-amber-500/10 border border-amber-500/20 rounded-full text-sm text-amber-400 flex items-center gap-1.5 font-medium">
+                <Wrench className="w-3.5 h-3.5" />
+                Bloqueio de Manutenção
               </span>
             )}
             <span
@@ -539,6 +563,21 @@ export function AdminReservaDetalhes({ reservaId }: { reservaId: string }) {
                   />
                 </div>
               </div>
+
+              {/* Botão de Marcar como Pago */}
+              {reserva.valorPendente > 0 && reserva.status !== "cancelada" && (
+                <div className="px-5 pb-5">
+                  <button
+                    type="button"
+                    id="admin-detalhe-marcar-pago-btn"
+                    onClick={handleMarcarComoPago}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-sm shadow-lg shadow-emerald-500/20 active:scale-[0.98] transition-all cursor-pointer"
+                  >
+                    <CheckCircle2 className="w-4 h-4" />
+                    Marcar como Pago (Quitar {formatarMoeda(reserva.valorPendente)})
+                  </button>
+                </div>
+              )}
             </SecaoCard>
 
             {/* Notificação / WhatsApp */}

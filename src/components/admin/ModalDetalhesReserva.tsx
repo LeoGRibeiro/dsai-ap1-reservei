@@ -6,7 +6,8 @@
 
 "use client";
 
-import { useEffect, useCallback } from "react";
+import { useEffect, useState, useCallback } from "react";
+import { createPortal } from "react-dom";
 import {
   X,
   User,
@@ -27,11 +28,15 @@ import {
   ExternalLink,
   Send,
   Sparkles,
+  ShieldCheck,
+  Wrench as WrenchIcon,
 } from "lucide-react";
 import type { Reserva } from "@/store/useReservasStore";
 import { formatarMoeda, formatarDataExibicao } from "@/lib/constants";
 import { PREPARACAO_POR_ESPORTE } from "@/lib/quadras";
 import { getTelefonesCadastradosLocal } from "@/lib/supabase/authService";
+import { useReservasService } from "@/hooks/useReservasService";
+import { toast } from "sonner";
 
 // ─── Config de status ─────────────────────────────────────────────────────────
 
@@ -227,6 +232,13 @@ interface Props {
 }
 
 export function ModalDetalhesReserva({ reserva, onFechar }: Props) {
+  const { confirmarPagamentoRestante } = useReservasService();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   // Fechar com Escape
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
@@ -235,17 +247,23 @@ export function ModalDetalhesReserva({ reserva, onFechar }: Props) {
     [onFechar]
   );
 
+  const handleMarcarComoPago = useCallback(() => {
+    if (!reserva) return;
+    confirmarPagamentoRestante(reserva.id);
+    toast.success("Pagamento confirmado com sucesso!", {
+      description: `A reserva de ${reserva.nomeCliente} foi marcada como paga integralmente.`,
+    });
+  }, [reserva, confirmarPagamentoRestante]);
+
   useEffect(() => {
     if (!reserva) return;
     document.addEventListener("keydown", handleKeyDown);
-    document.body.style.overflow = "hidden";
     return () => {
       document.removeEventListener("keydown", handleKeyDown);
-      document.body.style.overflow = "";
     };
   }, [reserva, handleKeyDown]);
 
-  if (!reserva) return null;
+  if (!reserva || !mounted) return null;
 
   const statusCfg =
     STATUS_CONFIG[reserva.status] ?? STATUS_CONFIG.pendente;
@@ -267,16 +285,15 @@ export function ModalDetalhesReserva({ reserva, onFechar }: Props) {
     minute: "2-digit",
   });
 
-  return (
-    <>
-      {/* Overlay */}
-      <div
-        className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm animate-fade-in"
-        onClick={onFechar}
-      />
-
-      {/* Drawer lateral */}
-      <div className="fixed inset-y-0 right-0 z-50 w-full max-w-md flex flex-col bg-slate-900 border-l border-slate-700/60 shadow-2xl animate-slide-in-right overflow-y-auto">
+  return createPortal(
+    <div className="fixed inset-0 z-50 pointer-events-none overflow-hidden">
+      {/* Drawer lateral fixado na borda direita sem bloquear o restante da tela */}
+      <aside
+        role="dialog"
+        aria-modal="false"
+        aria-labelledby="modal-detalhes-titulo"
+        className="fixed inset-y-0 right-0 z-50 w-full sm:w-[480px] max-w-full h-full flex flex-col bg-slate-900 border-l border-slate-700/80 shadow-2xl animate-slide-in-right overflow-y-auto pointer-events-auto"
+      >
 
         {/* Header */}
         <div className="flex items-start justify-between px-6 pt-6 pb-5 border-b border-slate-700/50 sticky top-0 bg-slate-900 z-10">
@@ -313,6 +330,31 @@ export function ModalDetalhesReserva({ reserva, onFechar }: Props) {
               </p>
             </div>
           </div>
+
+          {/* Destaque para Reserva Manual ou Bloqueio */}
+          {reserva.tipoReserva === "admin_manual" && (
+            <div className="flex items-center gap-2.5 px-4 py-3 rounded-xl bg-sky-500/15 border border-sky-500/30 text-sky-300">
+              <ShieldCheck className="w-5 h-5 text-sky-400 flex-shrink-0" />
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wide">Reserva Manual pelo Admin</p>
+                <p className="text-[11px] text-sky-300/80 mt-0.5">
+                  Agendada diretamente pelo balcão ou atendimento via WhatsApp.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {reserva.tipoReserva === "manutencao_bloqueio" && (
+            <div className="flex items-center gap-2.5 px-4 py-3 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300">
+              <WrenchIcon className="w-5 h-5 text-amber-400 flex-shrink-0" />
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wide">Bloqueio Administrativo / Manutenção</p>
+                <p className="text-[11px] text-amber-300/80 mt-0.5">
+                  {reserva.observacoes || "Horário interditado para uso."}
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* Seção: Cliente */}
           <section>
@@ -457,6 +499,19 @@ export function ModalDetalhesReserva({ reserva, onFechar }: Props) {
                 />
               </div>
             </div>
+
+            {/* Ação rápida: Marcar como Pago */}
+            {reserva.valorPendente > 0 && reserva.status !== "cancelada" && (
+              <button
+                type="button"
+                id="modal-marcar-como-pago-btn"
+                onClick={handleMarcarComoPago}
+                className="w-full mt-3 flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-sm shadow-lg shadow-emerald-500/20 active:scale-[0.98] transition-all cursor-pointer"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                Marcar como Pago (Quitar {formatarMoeda(reserva.valorPendente)})
+              </button>
+            )}
           </section>
 
           {/* Seção: WhatsApp / Contato */}
@@ -513,7 +568,7 @@ export function ModalDetalhesReserva({ reserva, onFechar }: Props) {
             )}
           </section>
         </div>
-      </div>
+      </aside>
 
       <style jsx>{`
         @keyframes slide-in-right {
@@ -524,6 +579,7 @@ export function ModalDetalhesReserva({ reserva, onFechar }: Props) {
           animation: slide-in-right 0.25s cubic-bezier(0.16, 1, 0.3, 1);
         }
       `}</style>
-    </>
+    </div>,
+    document.body
   );
 }
