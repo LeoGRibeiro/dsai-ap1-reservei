@@ -124,7 +124,9 @@ export function getHoje(): string {
 
 /** Mascara WhatsApp: (00) 00000-0000 */
 export function mascaraWhatsApp(valor: string): string {
+  if (!valor) return "";
   const nums = valor.replace(/\D/g, "").slice(0, 11);
+  if (!nums) return "";
   if (nums.length <= 2) return `(${nums}`;
   if (nums.length <= 7) return `(${nums.slice(0, 2)}) ${nums.slice(2)}`;
   return `(${nums.slice(0, 2)}) ${nums.slice(2, 7)}-${nums.slice(7)}`;

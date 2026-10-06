@@ -325,3 +325,16 @@ BEGIN
 END $$;
 
 
+
+-- ==============================================================================
+-- Bloqueio de Usu�rios
+-- Spec: SPEC/2026-10-06-bloqueio-usuarios.md
+-- ==============================================================================
+
+-- Adiciona os campos � tabela profiles
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS bloqueado BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS motivo_bloqueio TEXT;
+
+
+ALTER TABLE public.usuarios ADD COLUMN IF NOT EXISTS bloqueado BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.usuarios ADD COLUMN IF NOT EXISTS motivo_bloqueio TEXT;

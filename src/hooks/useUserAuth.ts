@@ -42,30 +42,41 @@ export function useUserAuth() {
 
     void carregarSessao();
 
+    const handleSync = async () => {
+      if (!isMounted) return;
+      try {
+        const u = await obterUsuarioAtual();
+        if (isMounted) setUser(u);
+      } catch {}
+    };
+
+    if (typeof window !== "undefined") {
+      window.addEventListener("storage", handleSync);
+      window.addEventListener("focus", handleSync);
+    }
+
     // Inscrição para mudanças de autenticação no Supabase
+    let authSub: { unsubscribe: () => void } | null = null;
     if (isSupabaseConfigured()) {
       const {
         data: { subscription },
       } = supabase.auth.onAuthStateChange(async (_event, session) => {
         if (!isMounted) return;
-        if (session?.user) {
-          const u = await obterUsuarioAtual();
-          if (isMounted) setUser(u);
-        } else {
-          // Só limpa se não estiver no fallback local
-          const u = await obterUsuarioAtual();
-          if (isMounted) setUser(u);
-        }
+        const u = await obterUsuarioAtual();
+        if (isMounted) setUser(u);
       });
-
-      return () => {
-        isMounted = false;
-        subscription.unsubscribe();
-      };
+      authSub = subscription;
     }
 
     return () => {
       isMounted = false;
+      if (typeof window !== "undefined") {
+        window.removeEventListener("storage", handleSync);
+        window.removeEventListener("focus", handleSync);
+      }
+      if (authSub) {
+        authSub.unsubscribe();
+      }
     };
   }, []);
 
