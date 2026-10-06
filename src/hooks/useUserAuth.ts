@@ -101,7 +101,7 @@ export function useUserAuth() {
         authSub.unsubscribe();
       }
     };
-  }, [setUser, setLoading, user]);
+  }, [setUser, setLoading]);
 
   const login = useCallback(
     async (telefone: string, senha: string): Promise<{ success: boolean; error?: string }> => {
@@ -139,6 +139,12 @@ export function useUserAuth() {
   const logout = useCallback(async () => {
     setLoading(true);
     await logoutUsuarioSupabase();
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.removeItem("reservei_current_user");
+        sessionStorage.removeItem("reservei_current_user");
+      } catch {}
+    }
     setUser(null);
     setLoading(false);
   }, [setUser, setLoading]);

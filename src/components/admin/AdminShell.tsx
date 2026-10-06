@@ -40,8 +40,13 @@ interface Props {
 
 export function AdminShell({ initialView = "dashboard" }: Props) {
   const { autenticado, login, logout } = useAdminAuth();
+  const [mounted, setMounted] = useState(false);
   const [view, setView] = useState<AdminView>(initialView);
   const router = useRouter();
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Redireciona para /admin/dashboard após login bem-sucedido
   useEffect(() => {
@@ -53,8 +58,8 @@ export function AdminShell({ initialView = "dashboard" }: Props) {
     }
   }, [autenticado, router]);
 
-  // ── Carregando (hidratação do LocalStorage) ──────────────────────────────
-  if (autenticado === null) {
+  // ── Carregando (hidratação do LocalStorage e montagem no cliente) ─────────
+  if (!mounted || autenticado === null) {
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center">
         <span className="inline-block w-6 h-6 border-2 border-slate-700 border-t-emerald-400 rounded-full animate-spin" />

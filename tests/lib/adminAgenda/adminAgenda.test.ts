@@ -11,6 +11,9 @@ import {
   isNavegacaoMesPermitida,
   getNomeMesExtenso,
   LIMITE_MESES_FUTURO,
+  horarioParaMinutos,
+  formatarTempoRestante,
+  calcularProgressoAtivo,
 } from "@/lib/adminAgenda/adminAgendaService";
 import type { Reserva } from "@/store/useReservasStore";
 
@@ -387,6 +390,106 @@ describe("adminAgendaService - Testes de Unidade e Regras de Negócio", () => {
       expect(getNomeMesExtenso(1)).toBe("Janeiro");
       expect(getNomeMesExtenso(10)).toBe("Outubro");
       expect(getNomeMesExtenso(12)).toBe("Dezembro");
+    });
+  });
+
+  // ─── 7. Linha do Tempo e Progresso Ativo (Gantt) ──────────────────────────────
+  describe("calcularProgressoAtivo e helpers de tempo da Timeline", () => {
+    it("deve converter corretamente horário HH:MM para minutos", () => {
+      expect(horarioParaMinutos("00:00")).toBe(0);
+      expect(horarioParaMinutos("08:00")).toBe(480);
+      expect(horarioParaMinutos("16:00")).toBe(960);
+      expect(horarioParaMinutos("17:18")).toBe(1038);
+      expect(horarioParaMinutos("20:00")).toBe(1200);
+      expect(horarioParaMinutos("")).toBe(0);
+    });
+
+    it("deve formatar tempo restante em MM:SS", () => {
+      expect(formatarTempoRestante(45)).toBe("45:00");
+      expect(formatarTempoRestante(162)).toBe("162:00");
+      expect(formatarTempoRestante(2.5)).toBe("02:30");
+      expect(formatarTempoRestante(0)).toBe("00:00");
+    });
+
+    it("NÃO deve marcar como ativa uma reserva de DIA FUTURO, mesmo que o horário do relógio coincida", () => {
+      // Cenário relatado pelo usuário: Hoje é terça (2026-10-06), 17:18.
+      // O usuário está visualizando domingo (2026-10-11) com um bloqueio/reserva das 16:00 às 20:00.
+      const reservaDomingo = criarReservaMock({
+        data: "2026-10-11",
+        horaInicio: "16:00",
+        horaFim: "20:00",
+        tipoReserva: "manutencao_bloqueio",
+      });
+
+      const agoraMinutos = horarioParaMinutos("17:18"); // 1038 min
+      const hoje = "2026-10-06";
+      const dataExibida = "2026-10-11"; // Domingo
+
+      const progresso = calcularProgressoAtivo(reservaDomingo, dataExibida, agoraMinutos, hoje);
+
+      expect(progresso).toBeNull();
+    });
+
+    it("NÃO deve marcar como ativa uma reserva de DIA PASSADO", () => {
+      const reservaOntem = criarReservaMock({
+        data: "2026-10-05",
+        horaInicio: "16:00",
+        horaFim: "20:00",
+      });
+
+      const agoraMinutos = horarioParaMinutos("17:18");
+      const hoje = "2026-10-06";
+      const dataExibida = "2026-10-05";
+
+      const progresso = calcularProgressoAtivo(reservaOntem, dataExibida, agoraMinutos, hoje);
+
+      expect(progresso).toBeNull();
+    });
+
+    it("DEVE calcular o progresso proporcional corretamente quando a data exibida for HOJE e estiver no intervalo", () => {
+      const reservaHoje = criarReservaMock({
+        data: "2026-10-06",
+        horaInicio: "16:00",
+        horaFim: "20:00",
+      });
+
+      const hoje = "2026-10-06";
+      const agoraMinutos = horarioParaMinutos("17:00"); // 60 min de 240 min = 25%
+
+      const progresso = calcularProgressoAtivo(reservaHoje, hoje, agoraMinutos, hoje);
+
+      expect(progresso).not.toBeNull();
+      expect(progresso).toBeCloseTo(0.25, 2);
+    });
+
+    it("NÃO deve marcar como ativa uma reserva de HOJE se o horário ainda não começou", () => {
+      const reservaHoje = criarReservaMock({
+        data: "2026-10-06",
+        horaInicio: "19:00",
+        horaFim: "21:00",
+      });
+
+      const hoje = "2026-10-06";
+      const agoraMinutos = horarioParaMinutos("17:18"); // Antes das 19:00
+
+      const progresso = calcularProgressoAtivo(reservaHoje, hoje, agoraMinutos, hoje);
+
+      expect(progresso).toBeNull();
+    });
+
+    it("NÃO deve marcar como ativa uma reserva de HOJE se o horário já terminou", () => {
+      const reservaHoje = criarReservaMock({
+        data: "2026-10-06",
+        horaInicio: "14:00",
+        horaFim: "16:00",
+      });
+
+      const hoje = "2026-10-06";
+      const agoraMinutos = horarioParaMinutos("17:18"); // Depois das 16:00
+
+      const progresso = calcularProgressoAtivo(reservaHoje, hoje, agoraMinutos, hoje);
+
+      expect(progresso).toBeNull();
     });
   });
 });

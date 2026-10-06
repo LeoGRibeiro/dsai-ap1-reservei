@@ -28,6 +28,12 @@ import { QUADRAS, HORARIOS_DISPONIVEIS, PREPARACAO_POR_ESPORTE } from "@/lib/qua
 import { gerarDiasDisponiveis, formatarDataExibicao } from "@/lib/constants";
 import type { Reserva } from "@/store/useReservasStore";
 import { getTelefonesCadastradosLocal } from "@/lib/supabase/authService";
+import {
+  calcularProgressoAtivo,
+  formatarTempoRestante,
+  horarioParaMinutos,
+  obterDataHojeLocal as hojeLocal,
+} from "@/lib/adminAgenda/adminAgendaService";
 
 import { CalendarioMensal } from "./agenda/CalendarioMensal";
 import { VisaoDiaGrade } from "./agenda/VisaoDiaGrade";
@@ -38,45 +44,9 @@ import { ModalDetalhesReserva } from "./ModalDetalhesReserva";
 
 // ─── Helpers de tempo ─────────────────────────────────────────────────────────
 
-function horarioParaMinutos(horario: string): number {
-  const [h, m] = horario.split(":").map(Number);
-  return h * 60 + m;
-}
-
-function hojeLocal(): string {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${dd}`;
-}
-
 function minutosAgora(): number {
   const d = new Date();
   return d.getHours() * 60 + d.getMinutes();
-}
-
-/**
- * Retorna o progresso [0..1] de uma reserva em andamento.
- * null se não estiver acontecendo agora.
- */
-function calcularProgressoAtivo(
-  reserva: Reserva,
-  dataExibida: string,
-  agora: number
-): number | null {
-  if (reserva.data !== dataExibida) return null;
-  const inicio = horarioParaMinutos(reserva.horaInicio);
-  const fim = horarioParaMinutos(reserva.horaFim);
-  if (agora < inicio || agora >= fim) return null;
-  return (agora - inicio) / (fim - inicio);
-}
-
-/** Formata mm:ss restantes */
-function formatarTempoRestante(minutosRestantes: number): string {
-  const m = Math.max(0, Math.floor(minutosRestantes));
-  const s = Math.max(0, Math.round((minutosRestantes - Math.floor(minutosRestantes)) * 60));
-  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
 // ─── Constantes de layout da Timeline ─────────────────────────────────────────

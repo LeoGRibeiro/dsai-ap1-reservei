@@ -264,9 +264,18 @@ export async function obterUsuarioAtual(): Promise<UserProfile | null> {
  * Desconecta o usuário
  */
 export async function logoutUsuarioSupabase(): Promise<void> {
+  if (isSupabaseConfigured()) {
+    try {
+      await supabase.auth.signOut();
+    } catch (err) {
+      console.warn("[Auth] Erro ao deslogar do Supabase:", err);
+    }
+  }
+
   if (typeof window !== "undefined") {
     try {
       localStorage.removeItem(STORAGE_CURRENT_USER_KEY);
+      sessionStorage.removeItem(STORAGE_CURRENT_USER_KEY);
     } catch {}
   }
 }
