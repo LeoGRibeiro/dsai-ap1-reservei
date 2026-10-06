@@ -186,17 +186,44 @@ export function useReservasService() {
   /** Reservas para o Dashboard Admin */
   const getTodasReservas = useCallback((): Reserva[] => reservas, [reservas]);
 
-  /** Totais financeiros */
+  /** Totais financeiros com discriminação de receita líquida e subsídios de fidelidade */
   const financeiro = useMemo(() => {
     const confirmadas = reservas.filter((r) => r.status === "confirmada");
     const naoCaneladas = reservas.filter((r) => r.status !== "cancelada");
+
+    // Total de descontos e benefícios concedidos através do programa de fidelidade
+    const totalDescontoFidelidade = naoCaneladas.reduce(
+      (acc, r) => acc + (Number(r.descontoFidelidade) || 0),
+      0
+    );
+
+    // Faturamento bruto de tabela correspondente às quadras reservadas
+    const totalBrutoQuadras = naoCaneladas.reduce((acc, r) => {
+      const original =
+        r.valorOriginal !== undefined && !isNaN(Number(r.valorOriginal)) && Number(r.valorOriginal) > 0
+          ? Number(r.valorOriginal)
+          : (Number(r.valorTotal) || 0) + (Number(r.descontoFidelidade) || 0);
+      return acc + (isNaN(original) ? 0 : original);
+    }, 0);
+
+    // Total líquido efetivamente arrecadado em dinheiro/Pix já confirmado
+    const totalConfirmado = confirmadas.reduce((acc, r) => acc + (Number(r.valorSinal) || 0), 0);
+
+    // Saldo pendente a receber em dinheiro/Pix no balcão
+    const pendenteSinalConfirmado = confirmadas.reduce(
+      (acc, r) => acc + (Number(r.valorPendente) || 0),
+      0
+    );
+
+    // Total líquido previsto a entrar em caixa (Pix + Balcão)
+    const totalPrevisto = naoCaneladas.reduce((acc, r) => acc + (Number(r.valorTotal) || 0), 0);
+
     return {
-      totalConfirmado: confirmadas.reduce((acc, r) => acc + r.valorSinal, 0),
-      totalPrevisto: naoCaneladas.reduce((acc, r) => acc + r.valorTotal, 0),
-      pendenteSinalConfirmado: confirmadas.reduce(
-        (acc, r) => acc + r.valorPendente,
-        0
-      ),
+      totalConfirmado,
+      totalPrevisto,
+      pendenteSinalConfirmado,
+      totalDescontoFidelidade,
+      totalBrutoQuadras,
     };
   }, [reservas]);
 
@@ -280,6 +307,18 @@ export function useReservasService() {
     },
     [atualizarReserva, getReservaById]
   );
+
+  /**
+   * Atualiza os dados completos de checkout (incluindo fidelidade e valores recalculados).
+   */
+  const atualizarDadosCheckout = useCallback(
+    (id: string, dados: Partial<Reserva>) => {
+      atualizarReserva(id, dados);
+      void atualizarReservaSupabase(id, dados);
+    },
+    [atualizarReserva]
+  );
+
 
   /**
    * Confirma o pagamento — atualiza status e valores no Supabase (UPDATE).
@@ -522,6 +561,7 @@ export function useReservasService() {
     // Mutations
     criarReservaEmProcessamento,
     atualizarIdentificacao,
+    atualizarDadosCheckout,
     confirmarPagamento,
     confirmarPagamentoRestante,
     liberarLock,

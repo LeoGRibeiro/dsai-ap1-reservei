@@ -38,8 +38,20 @@ export interface Reserva {
 
   // Financeiro
   valorTotal: number;
-  valorSinal: number;    // 40% do total
-  valorPendente: number; // 60% do total
+  valorSinal: number;    // 40% do total líquido
+  valorPendente: number; // 60% do total líquido
+
+  // Auditoria e Benefícios de Fidelidade
+  /** Valor integral da quadra antes de qualquer abatimento */
+  valorOriginal?: number;
+  /** Valor total abatido através de vouchers do programa de fidelidade */
+  descontoFidelidade?: number;
+  /** Códigos dos vouchers utilizados nesta reserva (ex: ["FID-OURO-2026", "FID-PRATA-2026"]) */
+  vouchersUtilizados?: string[];
+  /** Se a reserva foi 100% gratuita via benefício do programa de fidelidade */
+  reservaGratuitaFidelidade?: boolean;
+  /** Método de liquidação financeira registrado */
+  metodoPagamento?: "pix" | "fidelidade" | "misto" | "balcao";
 
   // Estado
   status: StatusReserva;

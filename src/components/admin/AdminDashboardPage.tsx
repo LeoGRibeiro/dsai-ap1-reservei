@@ -290,10 +290,21 @@ function ReservasDoDia({
                         </span>
                       );
                     })()}
+                    {r.reservaGratuitaFidelidade ? (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-300 border border-purple-500/30">
+                        🎁 100% Fidelidade
+                      </span>
+                    ) : r.descontoFidelidade && r.descontoFidelidade > 0 ? (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-300 border border-purple-500/30">
+                        🎁 -{formatarMoeda(r.descontoFidelidade)}
+                      </span>
+                    ) : null}
                   </div>
                   <p className="text-slate-500 text-xs mt-0.5">
                     {r.esporte ?? "Sem esporte"} ·{" "}
-                    {r.valorPendente === 0
+                    {r.reservaGratuitaFidelidade
+                      ? "🎁 Grátis por Fidelidade"
+                      : r.valorPendente === 0
                       ? `${formatarMoeda(r.valorSinal)} integral`
                       : `${formatarMoeda(r.valorSinal)} sinal`}
                   </p>
@@ -316,9 +327,13 @@ function ReservasDoDia({
                 {/* Status */}
                 <div className="sm:text-right">
                   <span
-                    className={`text-xs font-medium px-2.5 py-1 rounded-full border ${cfg.bg} ${cfg.cor}`}
+                    className={`text-xs font-medium px-2.5 py-1 rounded-full border ${
+                      r.reservaGratuitaFidelidade
+                        ? "bg-purple-500/10 text-purple-300 border-purple-500/30"
+                        : `${cfg.bg} ${cfg.cor}`
+                    }`}
                   >
-                    {cfg.label}
+                    {r.reservaGratuitaFidelidade ? "🎁 Voucher" : cfg.label}
                   </span>
                 </div>
               </a>

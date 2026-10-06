@@ -30,6 +30,8 @@ import {
   Sparkles,
   ShieldCheck,
   Wrench as WrenchIcon,
+  Gift,
+  Ticket,
 } from "lucide-react";
 import type { Reserva } from "@/store/useReservasStore";
 import { formatarMoeda, formatarDataExibicao } from "@/lib/constants";
@@ -123,6 +125,33 @@ function BotoesWhatsApp({ reserva, tipoPagamento }: BotoesWhatsAppProps) {
 
   // ── Mensagens pré-prontas ──────────────────────────────────────────────────
 
+  const isRecorrente = Boolean(
+    reserva.contratoId ||
+    reserva.tipoReserva === "escolinha" ||
+    reserva.tipoReserva === "grupo"
+  );
+  const temFidelidade = Boolean(
+    !isRecorrente &&
+    ((reserva.descontoFidelidade && reserva.descontoFidelidade > 0) ||
+      reserva.reservaGratuitaFidelidade ||
+      (reserva.vouchersUtilizados && reserva.vouchersUtilizados.length > 0))
+  );
+  const ehGratisFidelidade = Boolean(
+    !isRecorrente &&
+    (reserva.reservaGratuitaFidelidade ||
+      reserva.metodoPagamento === "fidelidade" ||
+      (temFidelidade && reserva.valorTotal === 0))
+  );
+
+  const textoPagamentoConfirmacao =
+    ehGratisFidelidade
+      ? "100% Coberta pelo Programa de Fidelidade 🎉 (R$ 0,00)"
+      : isRecorrente
+      ? "Contrato Mensal / Recorrente ⚽"
+      : tipoPagamento === "integral"
+      ? "Integral — pago por completo ✅"
+      : `Sinal de *${formatarMoeda(reserva.valorSinal)}* pago ✅`;
+
   const msgConfirmacao =
     `Olá, *${reserva.nomeCliente}*! 👋\n\n` +
     `✅ Sua reserva no *Complexo Esportivo Reservei* está confirmada!\n\n` +
@@ -130,8 +159,8 @@ function BotoesWhatsApp({ reserva, tipoPagamento }: BotoesWhatsAppProps) {
     `• Quadra ${quadraNum} — ${dataFormatada}\n` +
     `• Horário: *${reserva.horaInicio} – ${reserva.horaFim}*\n` +
     (reserva.esporte ? `• Esporte: *${reserva.esporte}*\n` : ``) +
-    `\n💰 *Pagamento:* ${tipoPagamento === "integral" ? "Integral — pago por completo ✅" : `Sinal de *${formatarMoeda(reserva.valorSinal)}* pago ✅`}\n` +
-    (tipoPagamento === "sinal"
+    `\n💰 *Pagamento:* ${textoPagamentoConfirmacao}\n` +
+    (tipoPagamento === "sinal" && !ehGratisFidelidade && !isRecorrente
       ? `• Restante a pagar no local: *${formatarMoeda(reserva.valorPendente)}*\n`
       : ``) +
     `\nNos vemos lá! 🏟️`;
@@ -271,6 +300,24 @@ export function ModalDetalhesReserva({ reserva, onFechar }: Props) {
 
   const quadraNum = reserva.quadraId.replace("q", "");
   const tipoPagamento = reserva.valorPendente === 0 ? "integral" : "sinal";
+
+  const isRecorrente = Boolean(
+    reserva.contratoId ||
+    reserva.tipoReserva === "escolinha" ||
+    reserva.tipoReserva === "grupo"
+  );
+  const temFidelidade = Boolean(
+    !isRecorrente &&
+    ((reserva.descontoFidelidade && reserva.descontoFidelidade > 0) ||
+      reserva.reservaGratuitaFidelidade ||
+      (reserva.vouchersUtilizados && reserva.vouchersUtilizados.length > 0))
+  );
+  const ehGratisFidelidade = Boolean(
+    !isRecorrente &&
+    (reserva.reservaGratuitaFidelidade ||
+      reserva.metodoPagamento === "fidelidade" ||
+      (temFidelidade && reserva.valorTotal === 0))
+  );
   const dataFormatada = formatarDataExibicao(reserva.data, {
     weekday: "long",
     day: "numeric",
@@ -330,6 +377,23 @@ export function ModalDetalhesReserva({ reserva, onFechar }: Props) {
               </p>
             </div>
           </div>
+
+          {/* Destaque para Reserva com Fidelidade / Voucher */}
+          {temFidelidade && (
+            <div className="flex items-start gap-2.5 px-4 py-3 rounded-xl bg-purple-500/15 border border-purple-500/30 text-purple-300">
+              <Gift className="w-5 h-5 text-purple-400 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wide">
+                  {ehGratisFidelidade
+                    ? "🎁 100% Gratuita (Voucher Fidelidade)"
+                    : `🎁 Desconto Fidelidade (-${formatarMoeda(reserva.descontoFidelidade || 0)})`}
+                </p>
+                <p className="text-[11px] text-purple-300/80 mt-0.5">
+                  Benefício concedido pelo programa de fidelidade do Reservei.
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* Destaque para Reserva Manual ou Bloqueio */}
           {reserva.tipoReserva === "admin_manual" && (
@@ -448,20 +512,93 @@ export function ModalDetalhesReserva({ reserva, onFechar }: Props) {
             <p className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-3">
               Financeiro
             </p>
+
+            {/* Card detalhado de Abatimento se houver Fidelidade */}
+            {temFidelidade && (
+              <div className="mb-3 p-3.5 rounded-xl bg-purple-500/10 border border-purple-500/30">
+                <div className="flex items-center gap-2 mb-2">
+                  <Gift className="w-4 h-4 text-purple-400" />
+                  <p className="text-xs font-bold text-purple-300 uppercase tracking-wide">
+                    {ehGratisFidelidade
+                      ? "Reserva 100% Coberta por Fidelidade"
+                      : "Desconto de Fidelidade Aplicado"}
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div>
+                    <span className="text-slate-400 block text-[11px]">Valor de Tabela:</span>
+                    <span className="text-slate-300 font-mono line-through">
+                      {formatarMoeda(
+                        reserva.valorOriginal !== undefined && !isNaN(Number(reserva.valorOriginal)) && Number(reserva.valorOriginal) > 0
+                          ? Number(reserva.valorOriginal)
+                          : (Number(reserva.valorTotal) || 0) + (Number(reserva.descontoFidelidade) || 0)
+                      )}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-purple-300 block text-[11px]">Abatimento Fidelidade:</span>
+                    <span className="text-purple-400 font-bold font-mono">
+                      -{formatarMoeda(Number(reserva.descontoFidelidade) || (Number(reserva.valorOriginal) || Number(reserva.valorTotal) || 0))}
+                    </span>
+                  </div>
+                </div>
+
+                {reserva.vouchersUtilizados && reserva.vouchersUtilizados.length > 0 && (
+                  <div className="mt-2.5 pt-2 border-t border-purple-500/20 flex items-center gap-1.5 flex-wrap">
+                    <Ticket className="w-3.5 h-3.5 text-purple-400 flex-shrink-0" />
+                    <span className="text-[11px] text-purple-300 font-medium">Vouchers Utilizados:</span>
+                    {reserva.vouchersUtilizados.map((cod) => (
+                      <span
+                        key={cod}
+                        className="px-1.5 py-0.5 rounded bg-purple-950 border border-purple-500/40 text-[10px] font-mono text-purple-200"
+                      >
+                        {cod}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl px-4">
               <DetalheRow
                 icon={DollarSign}
-                label="Valor total"
-                value={formatarMoeda(reserva.valorTotal)}
-                valueClass="text-white"
+                label="Valor Líquido a Pagar"
+                value={
+                  ehGratisFidelidade ? (
+                    <span className="text-purple-400 font-bold">R$ 0,00 (100% Coberta)</span>
+                  ) : isRecorrente ? (
+                    <span className="text-amber-400 font-bold">
+                      {reserva.valorTotal > 0 ? formatarMoeda(reserva.valorTotal) : "Contrato Mensal"}
+                    </span>
+                  ) : (
+                    formatarMoeda(reserva.valorTotal)
+                  )
+                }
+                valueClass={ehGratisFidelidade ? "text-purple-400" : "text-white"}
               />
               <DetalheRow
                 icon={Banknote}
-                label={tipoPagamento === "integral" ? "Pago (integral)" : "Sinal pago (40%)"}
-                value={formatarMoeda(reserva.valorSinal)}
-                valueClass="text-emerald-400"
+                label={
+                  ehGratisFidelidade
+                    ? "Forma de Pagamento"
+                    : isRecorrente
+                    ? "Tipo de Cobrança"
+                    : tipoPagamento === "integral"
+                    ? "Pago (integral)"
+                    : "Sinal pago (40%)"
+                }
+                value={
+                  ehGratisFidelidade
+                    ? "🎁 100% Voucher Fidelidade"
+                    : isRecorrente
+                    ? "⚽ Contrato Recorrente"
+                    : formatarMoeda(reserva.valorSinal)
+                }
+                valueClass={ehGratisFidelidade ? "text-purple-400" : "text-emerald-400"}
               />
-              {tipoPagamento === "sinal" && (
+              {tipoPagamento === "sinal" && !ehGratisFidelidade && !isRecorrente && (
                 <DetalheRow
                   icon={AlertCircle}
                   label="Pendente no local (60%)"
@@ -475,10 +612,16 @@ export function ModalDetalhesReserva({ reserva, onFechar }: Props) {
             <div className="mt-3 bg-slate-800/50 border border-slate-700/50 rounded-xl p-4">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-xs text-slate-400">
-                  {tipoPagamento === "integral" ? "Pago integralmente" : "Progresso do pagamento"}
+                  {ehGratisFidelidade
+                    ? "100% Coberta por Voucher"
+                    : isRecorrente
+                    ? "Contrato Recorrente"
+                    : tipoPagamento === "integral"
+                    ? "Pago integralmente"
+                    : "Progresso do pagamento"}
                 </span>
                 <span className="text-xs font-mono text-slate-300">
-                  {tipoPagamento === "integral"
+                  {ehGratisFidelidade || isRecorrente || tipoPagamento === "integral"
                     ? "100%"
                     : `${Math.round((reserva.valorSinal / reserva.valorTotal) * 100)}%`}
                 </span>
@@ -486,13 +629,17 @@ export function ModalDetalhesReserva({ reserva, onFechar }: Props) {
               <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
                 <div
                   className={`h-full rounded-full transition-all duration-500 ${
-                    tipoPagamento === "integral"
+                    ehGratisFidelidade
+                      ? "bg-purple-500"
+                      : isRecorrente
+                      ? "bg-amber-500"
+                      : tipoPagamento === "integral"
                       ? "bg-emerald-500"
                       : "bg-amber-500"
                   }`}
                   style={{
                     width:
-                      tipoPagamento === "integral"
+                      ehGratisFidelidade || isRecorrente || tipoPagamento === "integral"
                         ? "100%"
                         : `${Math.round((reserva.valorSinal / reserva.valorTotal) * 100)}%`,
                   }}
@@ -501,7 +648,7 @@ export function ModalDetalhesReserva({ reserva, onFechar }: Props) {
             </div>
 
             {/* Ação rápida: Marcar como Pago */}
-            {reserva.valorPendente > 0 && reserva.status !== "cancelada" && (
+            {reserva.valorPendente > 0 && !reserva.reservaGratuitaFidelidade && reserva.status !== "cancelada" && (
               <button
                 type="button"
                 id="modal-marcar-como-pago-btn"

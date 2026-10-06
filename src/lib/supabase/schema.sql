@@ -26,6 +26,12 @@ CREATE TABLE IF NOT EXISTS public.reservas (
 
 -- Migração incremental caso a coluna user_id não exista em bases já criadas
 ALTER TABLE public.reservas ADD COLUMN IF NOT EXISTS user_id TEXT;
+ALTER TABLE public.reservas ADD COLUMN IF NOT EXISTS valor_original NUMERIC(10, 2);
+ALTER TABLE public.reservas ADD COLUMN IF NOT EXISTS desconto_fidelidade NUMERIC(10, 2) DEFAULT 0;
+ALTER TABLE public.reservas ADD COLUMN IF NOT EXISTS vouchers_utilizados TEXT[] DEFAULT '{}';
+ALTER TABLE public.reservas ADD COLUMN IF NOT EXISTS reserva_gratuita_fidelidade BOOLEAN DEFAULT false;
+ALTER TABLE public.reservas ADD COLUMN IF NOT EXISTS metodo_pagamento TEXT DEFAULT 'pix';
+
 
 -- Tabela de Usuários para Login com WhatsApp e Senha (sem exigência de provedor de SMS pago)
 CREATE TABLE IF NOT EXISTS public.usuarios (
@@ -217,4 +223,105 @@ BEGIN
       WITH CHECK (true);
   END IF;
 END $$;
+
+-- ==============================================================================
+-- Sistema de Fidelidade (Ticket Médio e Recompensas)
+-- Spec: SPEC/2026-10-05-sistema-fidelidade.md
+-- ==============================================================================
+
+-- 1. Tabela de Configuração da Campanha
+CREATE TABLE IF NOT EXISTS public.fidelidade_campanha (
+  id TEXT PRIMARY KEY DEFAULT 'campanha_padrao',
+  nome TEXT NOT NULL DEFAULT 'Fidelidade Campeão Reservei',
+  horas_necessarias INTEGER NOT NULL DEFAULT 12,
+  meses_validade INTEGER NOT NULL DEFAULT 3,
+  dias_validade_voucher INTEGER NOT NULL DEFAULT 60,
+  ativo BOOLEAN NOT NULL DEFAULT TRUE,
+  atualizado_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Insere campanha padrão se não existir
+INSERT INTO public.fidelidade_campanha (id, nome, horas_necessarias, meses_validade, dias_validade_voucher, ativo)
+VALUES ('campanha_padrao', 'Fidelidade Campeão Reservei', 12, 3, 60, true)
+ON CONFLICT (id) DO NOTHING;
+
+-- Habilitar RLS em fidelidade_campanha
+ALTER TABLE public.fidelidade_campanha ENABLE ROW LEVEL SECURITY;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE tablename = 'fidelidade_campanha' AND policyname = 'Permitir acesso completo a fidelidade_campanha'
+  ) THEN
+    CREATE POLICY "Permitir acesso completo a fidelidade_campanha"
+      ON public.fidelidade_campanha FOR ALL
+      USING (true)
+      WITH CHECK (true);
+  END IF;
+END $$;
+
+-- 2. Tabela de Selos de Horas Concluídas
+CREATE TABLE IF NOT EXISTS public.fidelidade_selos (
+  id TEXT PRIMARY KEY,
+  usuario_id TEXT NOT NULL,
+  reserva_id TEXT NOT NULL REFERENCES public.reservas(id) ON DELETE CASCADE,
+  horas_contabilizadas INTEGER NOT NULL DEFAULT 1,
+  valor_por_hora NUMERIC(10, 2) NOT NULL DEFAULT 0,
+  valor_total_reserva NUMERIC(10, 2) NOT NULL DEFAULT 0,
+  data_jogo DATE NOT NULL,
+  criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  expira_em DATE NOT NULL,
+  resgatado BOOLEAN NOT NULL DEFAULT FALSE,
+  voucher_id TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_fidelidade_selos_usuario ON public.fidelidade_selos (usuario_id, resgatado, expira_em);
+CREATE INDEX IF NOT EXISTS idx_fidelidade_selos_reserva ON public.fidelidade_selos (reserva_id);
+
+-- Habilitar RLS em fidelidade_selos
+ALTER TABLE public.fidelidade_selos ENABLE ROW LEVEL SECURITY;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE tablename = 'fidelidade_selos' AND policyname = 'Permitir acesso completo a fidelidade_selos'
+  ) THEN
+    CREATE POLICY "Permitir acesso completo a fidelidade_selos"
+      ON public.fidelidade_selos FOR ALL
+      USING (true)
+      WITH CHECK (true);
+  END IF;
+END $$;
+
+-- 3. Tabela de Vouchers Conquistados
+CREATE TABLE IF NOT EXISTS public.fidelidade_vouchers (
+  id TEXT PRIMARY KEY,
+  codigo TEXT UNIQUE NOT NULL,
+  usuario_id TEXT NOT NULL,
+  valor_teto NUMERIC(10, 2) NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'disponivel', -- 'disponivel' | 'utilizado' | 'expirado'
+  criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  expira_em DATE NOT NULL,
+  reserva_utilizada_id TEXT REFERENCES public.reservas(id) ON DELETE SET NULL,
+  utilizado_em TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_fidelidade_vouchers_usuario ON public.fidelidade_vouchers (usuario_id, status);
+CREATE INDEX IF NOT EXISTS idx_fidelidade_vouchers_codigo ON public.fidelidade_vouchers (codigo);
+
+-- Habilitar RLS em fidelidade_vouchers
+ALTER TABLE public.fidelidade_vouchers ENABLE ROW LEVEL SECURITY;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE tablename = 'fidelidade_vouchers' AND policyname = 'Permitir acesso completo a fidelidade_vouchers'
+  ) THEN
+    CREATE POLICY "Permitir acesso completo a fidelidade_vouchers"
+      ON public.fidelidade_vouchers FOR ALL
+      USING (true)
+      WITH CHECK (true);
+  END IF;
+END $$;
+
 

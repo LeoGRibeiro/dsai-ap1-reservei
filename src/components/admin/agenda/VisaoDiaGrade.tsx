@@ -366,7 +366,11 @@ export function VisaoDiaGrade({
                         <div className="min-w-0 w-full">
                           <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1">
                             <User className="w-3.5 h-3.5 flex-shrink-0" />
-                            Cliente Online
+                            {slot.reserva?.reservaGratuitaFidelidade
+                              ? "🎁 100% Fidelidade"
+                              : slot.reserva?.descontoFidelidade && slot.reserva.descontoFidelidade > 0
+                              ? "🎁 Voucher Fidelidade"
+                              : "Cliente Online"}
                           </span>
                           <p className="text-sm font-bold text-emerald-100 mt-1 font-mono">
                             {slot.horario} – {slot.horaFim}
@@ -379,12 +383,18 @@ export function VisaoDiaGrade({
                         <div className="pt-2 border-t border-emerald-500/20 mt-2 flex items-center justify-between w-full min-w-0">
                           <span
                             className={`text-[10px] font-bold px-2 py-0.5 rounded ${
-                              slot.pago
+                              slot.reserva?.reservaGratuitaFidelidade
+                                ? "bg-purple-500/30 text-purple-300"
+                                : slot.pago
                                 ? "bg-emerald-500/30 text-emerald-300"
                                 : "bg-amber-500/30 text-amber-300"
                             }`}
                           >
-                            {slot.pago ? "✓ Pago" : "Pendente"}
+                            {slot.reserva?.reservaGratuitaFidelidade
+                              ? "🎁 100% Voucher"
+                              : slot.pago
+                              ? "✓ Pago"
+                              : "Pendente"}
                           </span>
                           <span className="text-xs text-emerald-400 group-hover:translate-x-0.5 transition-transform flex-shrink-0">
                             Detalhes →
