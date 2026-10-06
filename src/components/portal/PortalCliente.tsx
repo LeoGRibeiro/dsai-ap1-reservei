@@ -15,6 +15,8 @@ import { MuralVagasAbertas } from "@/components/vagas/MuralVagasAbertas";
 import { LandingHeader } from "@/components/landing/LandingHeader";
 import { LandingFooter } from "@/components/landing/LandingFooter";
 import { LandingSecoesPlaceholder } from "@/components/landing/LandingSecoesPlaceholder";
+import { SecaoEstrutura } from "@/components/landing/SecaoEstrutura";
+import { SecaoEscolinhas } from "@/components/landing/SecaoEscolinhas";
 import { CabecalhoReserva, ID_TITULO_RESERVA } from "@/components/landing/CabecalhoReserva";
 import { BotaoVoltarAoTopo } from "@/components/landing/BotaoVoltarAoTopo";
 import { SmoothScrollProvider } from "@/components/landing/SmoothScrollProvider";
@@ -500,7 +502,13 @@ export function PortalCliente() {
         </div>
         </section>
 
-        {/* ── Seções institucionais (placeholders até cada spec ser implementada) ── */}
+        {/* ── Seção: O Local e Estrutura (Galeria e Apresentação) ──────── */}
+        <SecaoEstrutura />
+
+        {/* ── Seção: Escolinhas e Aulas Esportivas ─────────────────────── */}
+        <SecaoEscolinhas />
+
+        {/* ── Seções institucionais futuras (placeholders das próximas specs) ── */}
         <LandingSecoesPlaceholder />
 
         {/* ── Rodapé ─────────────────────────────────────────────────── */}

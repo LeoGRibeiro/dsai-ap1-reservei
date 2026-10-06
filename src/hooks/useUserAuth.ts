@@ -25,19 +25,22 @@ import { useAuthStore, getUsuarioCacheLocal } from "@/store/useAuthStore";
 export function useUserAuth() {
   const user = useAuthStore((s) => s.user);
   const loading = useAuthStore((s) => s.loading);
+  const hasHydrated = useAuthStore((s) => s.hasHydrated);
   const setUser = useAuthStore((s) => s.setUser);
   const setLoading = useAuthStore((s) => s.setLoading);
+  const setHasHydrated = useAuthStore((s) => s.setHasHydrated);
 
   // Carrega e sincroniza usuário na inicialização
   useEffect(() => {
     let isMounted = true;
 
-    // Hidratação síncrona do cache se a store ainda estiver nula
-    if (!user && typeof window !== "undefined") {
+    // Hidratação síncrona do cache local assim que o componente monta no cliente
+    if (!hasHydrated && typeof window !== "undefined") {
       const cached = getUsuarioCacheLocal();
       if (cached && isMounted) {
         setUser(cached);
       }
+      setHasHydrated(true);
     }
 
     async function carregarSessao() {
@@ -166,6 +169,7 @@ export function useUserAuth() {
   return {
     user,
     loading,
+    hasHydrated,
     isAutenticado: Boolean(user),
     login,
     cadastrar,

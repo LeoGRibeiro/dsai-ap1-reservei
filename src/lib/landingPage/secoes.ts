@@ -126,26 +126,10 @@ export const SECOES_LANDING_PAGE: readonly SecaoLandingPage[] = [
  * Funcionalidades previstas para cada seção ainda não implementada.
  * Exibidas nos placeholders para dar noção do layout final.
  *
- * Remova a entrada correspondente quando a seção real for implementada.
+ * À medida que cada spec for implementada (ex: Estrutura e Escolinhas),
+ * a seção é removida daqui e renderizada como componente completo.
  */
 export const PLACEHOLDERS_SECOES: readonly PlaceholderSecao[] = [
-  {
-    secaoId: SECAO_IDS.ESTRUTURA,
-    itensPlanejados: [
-      "Galeria/carrossel de fotos das quadras, bar, vestiários e lazer",
-      "Descrições editáveis pelo Painel Admin",
-      "Upload de imagens via Supabase Storage",
-    ],
-  },
-  {
-    secaoId: SECAO_IDS.ESCOLINHAS,
-    itensPlanejados: [
-      "Cards por modalidade (Tênis, Beach Tennis, Futebol...)",
-      "Perfil e foto do professor responsável",
-      "Faixas etárias e horários",
-      "Botão \"Tenho Interesse\" com mensagem pronta no WhatsApp",
-    ],
-  },
   {
     secaoId: SECAO_IDS.FIDELIDADE,
     itensPlanejados: [

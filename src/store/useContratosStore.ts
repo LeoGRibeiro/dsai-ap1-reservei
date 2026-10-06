@@ -7,6 +7,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { ContratoRecorrente } from "@/lib/recorrencia/types";
+import { CONTRATOS_ESCOLINHAS_INICIAIS } from "@/lib/institucional/dadosIniciais";
 
 interface ContratosState {
   contratos: ContratoRecorrente[];
@@ -21,7 +22,7 @@ interface ContratosState {
 export const useContratosStore = create<ContratosState>()(
   persist(
     (set, get) => ({
-      contratos: [],
+      contratos: [...CONTRATOS_ESCOLINHAS_INICIAIS],
       isLoadedFromDb: false,
 
       setContratos: (contratos) => set({ contratos, isLoadedFromDb: true }),

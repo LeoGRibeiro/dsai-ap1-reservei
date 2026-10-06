@@ -61,6 +61,11 @@ export interface ContratoRecorrente {
   /** Duração do contrato em meses */
   meses: number;
 
+  /** Foto do professor / banner da modalidade para divulgação na Landing Page */
+  fotoUrl?: string;
+  /** Faixa etária atendida (ex: Infantil, Juvenil, Adulto) */
+  faixaEtaria?: string;
+
   ativo: boolean;
   criadoEm: string;
 }

@@ -7,10 +7,11 @@
 
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { GraduationCap, Users, X, Loader2, Info } from "lucide-react";
+import { GraduationCap, Users, X, Loader2, Info, Upload } from "lucide-react";
 import { ESPORTES, QUADRAS, type Esporte } from "@/lib/quadras";
 import { mascaraWhatsApp, formatarDataExibicao } from "@/lib/constants";
 import { DIAS_SEMANA, type ContratoRecorrente } from "@/lib/recorrencia/types";
+import { uploadImagemInstitucional } from "@/lib/supabase/institucionalRepository";
 
 interface Props {
   contrato: ContratoRecorrente | null;
@@ -23,6 +24,8 @@ interface Props {
       descricao?: string;
       responsavelNome: string;
       contatoWhatsapp: string;
+      fotoUrl?: string;
+      faixaEtaria?: string;
     }
   ) => Promise<{ ok: boolean; motivo?: string }>;
 }
@@ -38,6 +41,9 @@ export function ModalEditarContrato({ contrato, onClose, onSalvar }: Props) {
   const [descricao, setDescricao] = useState("");
   const [responsavelNome, setResponsavelNome] = useState("");
   const [contatoWhatsapp, setContatoWhatsapp] = useState("");
+  const [fotoUrl, setFotoUrl] = useState("");
+  const [faixaEtaria, setFaixaEtaria] = useState("");
+  const [enviandoFoto, setEnviandoFoto] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
@@ -52,6 +58,8 @@ export function ModalEditarContrato({ contrato, onClose, onSalvar }: Props) {
       setDescricao(contrato.descricao || "");
       setResponsavelNome(contrato.responsavelNome);
       setContatoWhatsapp(mascaraWhatsApp(contrato.contatoWhatsapp));
+      setFotoUrl(contrato.fotoUrl || "");
+      setFaixaEtaria(contrato.faixaEtaria || "");
       setErro(null);
     }
   }, [contrato]);
@@ -68,6 +76,20 @@ export function ModalEditarContrato({ contrato, onClose, onSalvar }: Props) {
     setContatoWhatsapp(mascaraWhatsApp(valor));
   };
 
+  const handleUploadFoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setEnviandoFoto(true);
+    try {
+      const res = await uploadImagemInstitucional(file, "professores");
+      if (res.success && res.url) {
+        setFotoUrl(res.url);
+      }
+    } finally {
+      setEnviandoFoto(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErro(null);
@@ -80,6 +102,8 @@ export function ModalEditarContrato({ contrato, onClose, onSalvar }: Props) {
         descricao: ehEscolinha ? descricao : undefined,
         responsavelNome,
         contatoWhatsapp,
+        fotoUrl: ehEscolinha ? (fotoUrl || undefined) : undefined,
+        faixaEtaria: ehEscolinha ? (faixaEtaria || undefined) : undefined,
       });
 
       if (resultado.ok) {
@@ -208,24 +232,80 @@ export function ModalEditarContrato({ contrato, onClose, onSalvar }: Props) {
             />
           </div>
 
-          {/* Descrição (somente escolinhas) */}
+          {/* Descrição, Faixa Etária e Foto (somente escolinhas) */}
           {ehEscolinha && (
-            <div>
-              <label htmlFor="editar-descricao" className={CLASSE_LABEL}>
-                Descrição da escolinha
-              </label>
-              <textarea
-                id="editar-descricao"
-                rows={3}
-                className={CLASSE_INPUT}
-                value={descricao}
-                onChange={(e) => setDescricao(e.target.value)}
-                placeholder="Ex.: Para crianças de 8 a 14 anos. Turmas pela manhã e tarde. Matrículas abertas!"
-              />
-              <span className="text-[11px] text-slate-500 mt-1 block">
-                Exibido para os clientes no portal e no modal de detalhes do horário.
-              </span>
-            </div>
+            <>
+              <div>
+                <label htmlFor="editar-descricao" className={CLASSE_LABEL}>
+                  Descrição da escolinha
+                </label>
+                <textarea
+                  id="editar-descricao"
+                  rows={3}
+                  className={CLASSE_INPUT}
+                  value={descricao}
+                  onChange={(e) => setDescricao(e.target.value)}
+                  placeholder="Ex.: Para crianças de 8 a 14 anos. Turmas pela manhã e tarde. Matrículas abertas!"
+                />
+                <span className="text-[11px] text-slate-500 mt-1 block">
+                  Exibido para os clientes no portal e na Landing Page.
+                </span>
+              </div>
+
+              <div>
+                <label htmlFor="editar-faixa-etaria" className={CLASSE_LABEL}>
+                  Faixa Etária <span className="text-slate-500">(Landing Page)</span>
+                </label>
+                <input
+                  id="editar-faixa-etaria"
+                  className={CLASSE_INPUT}
+                  value={faixaEtaria}
+                  onChange={(e) => setFaixaEtaria(e.target.value)}
+                  placeholder="Ex.: Infantil (6 a 14 anos) ou Adulto Iniciante"
+                />
+              </div>
+
+              <div>
+                <label htmlFor="editar-foto-professor" className={CLASSE_LABEL}>
+                  Foto do Professor / Banner <span className="text-slate-500">(Landing Page)</span>
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    id="editar-foto-professor"
+                    type="url"
+                    className={`${CLASSE_INPUT} flex-1`}
+                    value={fotoUrl}
+                    onChange={(e) => setFotoUrl(e.target.value)}
+                    placeholder="https://... ou faça upload"
+                  />
+                  <label className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-semibold cursor-pointer transition-colors shrink-0">
+                    {enviandoFoto ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-400" />
+                    ) : (
+                      <Upload className="w-3.5 h-3.5 text-emerald-400" />
+                    )}
+                    <span>{enviandoFoto ? "Enviando..." : "Upload"}</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleUploadFoto}
+                      className="hidden"
+                      disabled={enviandoFoto}
+                    />
+                  </label>
+                </div>
+                {fotoUrl && (
+                  <div className="mt-2 flex items-center gap-2">
+                    <img
+                      src={fotoUrl}
+                      alt="Prévia da foto"
+                      className="w-10 h-10 rounded-lg object-cover border border-slate-700"
+                    />
+                    <span className="text-xs text-slate-400">Prévia da imagem no site</span>
+                  </div>
+                )}
+              </div>
+            </>
           )}
 
           {/* Dados fixos da agenda */}

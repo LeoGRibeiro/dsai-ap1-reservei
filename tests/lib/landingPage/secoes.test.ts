@@ -48,12 +48,13 @@ describe("landingPage/secoes - integridade do catálogo", () => {
 });
 
 describe("landingPage/secoes - placeholders", () => {
-  it("existe placeholder para todas as seções exceto a de reserva", () => {
-    const comPlaceholder = PLACEHOLDERS_SECOES.map((p) => p.secaoId).sort();
-    const esperadas = SECOES_LANDING_PAGE.filter((s) => s.id !== SECAO_IDS.INICIO)
-      .map((s) => s.id)
-      .sort();
-    expect(comPlaceholder).toEqual(esperadas);
+  it("mantém placeholders apenas para as seções ainda pendentes de implementação", () => {
+    const comPlaceholder = PLACEHOLDERS_SECOES.map((p) => p.secaoId);
+    expect(comPlaceholder).not.toContain(SECAO_IDS.INICIO);
+    expect(comPlaceholder).not.toContain(SECAO_IDS.ESTRUTURA);
+    expect(comPlaceholder).not.toContain(SECAO_IDS.ESCOLINHAS);
+    expect(comPlaceholder).toContain(SECAO_IDS.FIDELIDADE);
+    expect(comPlaceholder).toContain(SECAO_IDS.EVENTOS);
   });
 
   it("cada placeholder lista ao menos um item planejado, sem duplicidades", () => {

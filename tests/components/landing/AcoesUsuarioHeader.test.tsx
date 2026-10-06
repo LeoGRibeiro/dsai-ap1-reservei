@@ -18,6 +18,8 @@ vi.mock("@/hooks/useUserAuth", () => ({
   useUserAuth: () => ({
     user: mockUser,
     isAutenticado: Boolean(mockUser),
+    loading: false,
+    hasHydrated: true,
   }),
 }));
 

@@ -10,7 +10,7 @@ describe("LandingSecoesPlaceholder - Componente", () => {
   it("renderiza uma seção para cada área futura, na ordem do catálogo", () => {
     const { container } = render(<LandingSecoesPlaceholder />);
     const ids = Array.from(container.querySelectorAll("section")).map((s) => s.id);
-    const esperados = SECOES_LANDING_PAGE.filter((s) => s.id !== "inicio").map((s) => s.id);
+    const esperados = PLACEHOLDERS_SECOES.map((p) => p.secaoId);
     expect(ids).toEqual(esperados);
   });
 
@@ -53,10 +53,10 @@ describe("LandingSecoesPlaceholder - Componente", () => {
   });
 
   it("omite seções que já não possuem placeholder (já implementadas)", () => {
-    const parciais: PlaceholderSecao[] = PLACEHOLDERS_SECOES.filter((p) => p.secaoId !== "estrutura");
+    const parciais: PlaceholderSecao[] = PLACEHOLDERS_SECOES.filter((p) => p.secaoId !== "eventos");
     const { container } = render(<LandingSecoesPlaceholder placeholders={parciais} />);
-    expect(container.querySelector("#estrutura")).toBeNull();
-    expect(container.querySelector("#escolinhas")).not.toBeNull();
+    expect(container.querySelector("#eventos")).toBeNull();
+    expect(container.querySelector("#fidelidade")).not.toBeNull();
   });
 
   it("alterna o fundo destacado entre seções consecutivas", () => {

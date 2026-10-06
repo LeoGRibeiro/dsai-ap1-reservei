@@ -13,7 +13,11 @@ vi.mock("next/link", () => ({
   ),
 }));
 
-let mockUserAuth: { user: { id: string; nome: string; telefone: string } | null } = { user: null };
+let mockUserAuth: {
+  user: { id: string; nome: string; telefone: string } | null;
+  loading: boolean;
+  hasHydrated: boolean;
+} = { user: null, loading: false, hasHydrated: true };
 
 vi.mock("@/hooks/useUserAuth", () => ({
   useUserAuth: () => mockUserAuth,
@@ -46,6 +50,7 @@ describe("LandingHeader - Componente", () => {
     scrollToSpy = vi.spyOn(window, "scrollTo").mockImplementation(() => undefined);
     definirScrollY(0);
     window.history.replaceState(null, "", "/");
+    mockUserAuth = { user: null, loading: false, hasHydrated: true };
   });
 
   afterEach(() => {
@@ -88,7 +93,11 @@ describe("LandingHeader - Componente", () => {
   });
 
   it("exibe o primeiro nome e o atalho de Minhas Reservas para cliente logado", () => {
-    mockUserAuth = { user: { id: "u1", nome: "Leonardo Ribeiro", telefone: "11999998888" } };
+    mockUserAuth = {
+      user: { id: "u1", nome: "Leonardo Ribeiro", telefone: "11999998888" },
+      loading: false,
+      hasHydrated: true,
+    };
     renderizarPagina();
 
     expect(screen.getByText("Leonardo")).toBeInTheDocument();

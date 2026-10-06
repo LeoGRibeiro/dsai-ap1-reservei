@@ -26,11 +26,14 @@ import { useUserAuth } from "@/hooks/useUserAuth";
  * <AcoesUsuarioHeader />
  */
 export function AcoesUsuarioHeader() {
-  const { user, loading } = useUserAuth();
+  const { user, loading, hasHydrated } = useUserAuth();
 
-  // Se a verificação inicial de autenticação estiver ocorrendo e não houver usuário em cache,
-  // exibe um marcador sutil de mesma altura (h-9) para não piscar "Entrar/Criar Conta" indevidamente.
-  if (loading && !user) {
+  // Enquanto a hidratação inicial do cliente não ocorrer, renderiza o marcador sutil (h-9).
+  // Isso garante equivalência 100% idêntica entre o HTML gerado no servidor (SSR)
+  // e o primeiro ciclo de renderização no navegador, eliminando erros de hidratação do Next.js.
+  // Uma vez concluída no cliente, hasHydrated permanece true na store global,
+  // mantendo o usuário visível sem nenhum flickering durante trocas de rota.
+  if (!hasHydrated || (loading && !user)) {
     return (
       <div
         data-testid="header-auth-loading"
