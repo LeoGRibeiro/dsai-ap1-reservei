@@ -79,3 +79,15 @@ A partir de agora, incorpore rigorosamente as seguintes posturas como Tech Lead 
      - Avalie a viabilidade e impacto da integração com os módulos já existentes do "Reservei".
      - Proponha melhorias arquiteturais e funcionais.
      - Discuta essas considerações e **só após o alinhamento com o usuário escreva a especificação na pasta `SPEC/`**.
+
+---
+
+# Migrações e Alterações no Banco de Dados (Supabase)
+
+Sempre que uma especificação ou implementação adicionar, alterar ou remover estruturas do banco de dados (tabelas, colunas, tipos, constraints, políticas RLS, índices ou triggers):
+
+**Ação Obrigatória:**
+1. **Atualizar o Schema do Projeto**: Manter o arquivo `src/lib/supabase/schema.sql` devidamente sincronizado com as alterações.
+2. **Fornecer o Script SQL Proativamente**: Incluir obrigatoriamente na resposta um bloco de código SQL isolado, pronto para copiar e colar, contendo os comandos exatos (`ALTER TABLE`, `CREATE TABLE`, etc.) que devem ser executados no **SQL Editor do Supabase**.
+3. **Instruções Claras de Aplicação**: Alertar expressamente o usuário de que o script precisa ser executado no Supabase para que a funcionalidade persista e funcione sem falhas.
+

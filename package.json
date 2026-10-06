@@ -1,0 +1,13 @@
+{
+  "name": "reservei-root",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "npm --prefix src run dev",
+    "build": "npm --prefix src run build",
+    "start": "npm --prefix src run start",
+    "lint": "npm --prefix src run lint",
+    "typecheck": "npm --prefix src run typecheck",
+    "test": "npm --prefix src run test"
+  }
+}

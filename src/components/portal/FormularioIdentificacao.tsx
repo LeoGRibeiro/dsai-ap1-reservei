@@ -37,6 +37,8 @@ import {
 import { cn } from "@/lib/utils";
 import { useUserAuth } from "@/hooks/useUserAuth";
 import type { VoucherFidelidade } from "@/lib/fidelidade/types";
+import { toast } from "sonner";
+import { isTelefoneBloqueado } from "@/lib/supabase/authService";
 
 export interface DadosIdentificacao {
   nome: string;
@@ -172,12 +174,23 @@ export function FormularioIdentificacao({
     return Object.keys(novosErrors).length === 0;
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
+    const tel = user ? user.telefone : dados.whatsapp;
+    const isBloqueado = Boolean(user?.bloqueado) || (tel ? await isTelefoneBloqueado(tel) : false);
+
+    if (isBloqueado) {
+      toast.error("Conta bloqueada para novas reservas", {
+        description: "Sua conta está com restrição para novos agendamentos. Por favor, entre em contato para entender o motivo.",
+      });
+      return;
+    }
+
     if (user) {
       dados.nome = user.nome;
       dados.whatsapp = user.telefone;
     }
     if (!validar()) return;
+
     onConfirmar(dados, isGratis ? "integral" : tipoPagamento);
   };
 

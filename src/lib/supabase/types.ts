@@ -237,4 +237,6 @@ export interface UserProfile {
   telefone: string;
   dataNascimento?: string | null;
   criadoEm?: string;
+  bloqueado?: boolean;
+  motivo_bloqueio?: string | null;
 }

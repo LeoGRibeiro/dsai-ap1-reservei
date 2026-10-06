@@ -21,6 +21,7 @@ import { useUserAuth } from "@/hooks/useUserAuth";
 import { useFidelidadeService } from "@/hooks/useFidelidadeService";
 import type { VoucherFidelidade } from "@/lib/fidelidade/types";
 import { aplicarDescontoVouchers } from "@/lib/fidelidade/fidelidadeService";
+import { isTelefoneBloqueado } from "@/lib/supabase/authService";
 import {
   gerarDiasDisponiveis,
   getHoje,
@@ -126,6 +127,13 @@ export function PortalCliente() {
    */
   const handleToggleHorario = useCallback(
     (horario: string, quadraId: string) => {
+      if (user?.bloqueado) {
+        toast.error("Conta bloqueada para novas reservas", {
+          description: "Sua conta está com restrição para novos agendamentos. Por favor, entre em contato para entender o motivo.",
+        });
+        return;
+      }
+
       // Se clicar em quadra diferente, migra a seleção para a nova quadra
       if (quadraSelecionada !== null && quadraSelecionada !== quadraId) {
         setQuadraSelecionada(quadraId);
@@ -148,7 +156,7 @@ export function PortalCliente() {
         return next;
       });
     },
-    [quadraSelecionada]
+    [quadraSelecionada, user?.bloqueado]
   );
 
   const handleLimpar = useCallback(() => {
@@ -157,15 +165,24 @@ export function PortalCliente() {
     setVouchersSelecionadosIds([]);
   }, []);
 
-  const handleContinuar = useCallback(() => {
+  const handleContinuar = useCallback(async () => {
     if (!quadraSelecionada || horariosSelecionados.length === 0) return;
+
+    const tel = user?.telefone ? user.telefone.replace(/\D/g, "") : "";
+    const estaBloqueado = Boolean(user?.bloqueado) || (tel ? await isTelefoneBloqueado(tel) : false);
+
+    if (estaBloqueado) {
+      toast.error("Conta bloqueada para novas reservas", {
+        description: "Sua conta está com restrição para novos agendamentos. Por favor, entre em contato para entender o motivo.",
+      });
+      return;
+    }
 
     for (const h of horariosSelecionados) {
       if (isHorarioExpirado(dataSelecionada, h, 10)) {
         toast.error("Horário expirado", {
           description: "O horário escolhido já passou ou está muito próximo (menos de 10 min). Por favor, escolha outro.",
         });
-        // Remove os horários inválidos ou limpa tudo (aqui estamos só bloqueando)
         return;
       }
     }
@@ -184,6 +201,8 @@ export function PortalCliente() {
     horariosSelecionados,
     dataSelecionada,
     user?.id,
+    user?.bloqueado,
+    user?.telefone,
     criarReservaEmProcessamento,
   ]);
 
@@ -438,6 +457,33 @@ export function PortalCliente() {
         <div className="max-w-7xl mx-auto px-4 py-6 md:grid md:grid-cols-[1fr_320px] lg:grid-cols-[1fr_360px] md:gap-6 lg:gap-8 md:items-start">
           {/* Coluna esquerda: seleção */}
           <main className="space-y-6 pb-28 md:pb-6">
+            {/* Alerta de conta bloqueada */}
+            {user?.bloqueado && (
+              <div className="bg-red-950/40 border border-red-500/30 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 text-red-200 shadow-lg">
+                <div className="flex items-start gap-3.5">
+                  <div className="w-10 h-10 rounded-xl bg-red-500/10 border border-red-500/25 text-red-400 flex items-center justify-center flex-shrink-0 mt-0.5 text-lg">
+                    ⚠️
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-sm text-red-100">
+                      Conta Temporariamente Restrita para Reservas
+                    </h3>
+                    <p className="text-xs text-red-300/90 mt-1 leading-relaxed">
+                      Identificamos uma restrição em sua conta para agendamentos online. Para entender o motivo ou solicitar o desbloqueio, entre em contato com a administração.
+                    </p>
+                  </div>
+                </div>
+                <a
+                  href={`https://wa.me/5500000000000?text=${encodeURIComponent("Olá, gostaria de entender o motivo do bloqueio da minha conta no Reservei.")}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-red-500/20 hover:bg-red-500/30 text-red-200 border border-red-500/40 font-bold text-xs flex items-center justify-center gap-2 whitespace-nowrap transition-colors"
+                >
+                  Falar com Suporte
+                </a>
+              </div>
+            )}
+
             {/* Calendário horizontal */}
             <section>
               <CalendarioSelector
