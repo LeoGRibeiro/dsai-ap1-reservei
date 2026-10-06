@@ -20,6 +20,7 @@ import {
 } from "@/lib/constants";
 
 import {
+  calcularPrecoDinamico,
   calcularValoresDinamicos,
 } from "@/lib/dynamicPricing";
 import type { Esporte } from "@/lib/quadras";
@@ -154,7 +155,24 @@ export function useReservasService() {
   }, [setReservas]);
 
   // ── Queries ────────────────────────────────────────────────────────────────
+ /**
+   * Calcula o preço de um horário específico considerando o preço dinâmico.
+   * A UI usa esta função para exibir o preço promocional antes do checkout.
+   */
+  const getPrecoDinamico = useCallback(
+    (data: string, quadraId: string, horario: string) => {
+      const precoOriginal = calcularValorHora(horario);
 
+      return calcularPrecoDinamico({
+        data,
+        quadraId,
+        horario,
+        precoOriginal,
+        reservas,
+      });
+    },
+    [reservas]
+  );
   /** Reservas ativas para uma data e quadra específicas (exclui canceladas) */
   const getHorariosOcupados = useCallback(
     (data: string, quadraId: string): string[] => {
@@ -569,9 +587,10 @@ export function useReservasService() {
     [getReservaById, removerReserva]
   );
 
-  return {
+   return {
     // Queries
     reservas,
+    getPrecoDinamico,
     getHorariosOcupados,
     isHorarioOcupado,
     getHorariosOcupadosDia,
