@@ -4,7 +4,7 @@ import { useState, useCallback, useMemo } from "react";
 import { toast } from "sonner";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import Link from "next/link";
-import { User, Sparkles } from "lucide-react";
+import { User, Sparkles, Gift } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 import { CalendarioSelector } from "./CalendarioSelector";
@@ -18,6 +18,9 @@ import { MuralVagasAbertas } from "@/components/vagas/MuralVagasAbertas";
 import { useReservasService } from "@/hooks/useReservasService";
 import { useContratosService } from "@/hooks/useContratosService";
 import { useUserAuth } from "@/hooks/useUserAuth";
+import { useFidelidadeService } from "@/hooks/useFidelidadeService";
+import type { VoucherFidelidade } from "@/lib/fidelidade/types";
+import { aplicarDescontoVouchers } from "@/lib/fidelidade/fidelidadeService";
 import {
   gerarDiasDisponiveis,
   getHoje,
@@ -44,9 +47,11 @@ export function PortalCliente() {
   const [dadosForm, setDadosForm] = useState<DadosIdentificacao | null>(null);
   const [tipoPagamentoEscolhido, setTipoPagamentoEscolhido] = useState<"sinal" | "integral">("sinal");
   const [isCarrinhoOpen, setIsCarrinhoOpen] = useState(false);
+  const [vouchersSelecionadosIds, setVouchersSelecionadosIds] = useState<string[]>([]);
 
-  // ── Autenticação de Usuário ─────────────────────────────────────────────
+  // ── Autenticação de Usuário & Fidelidade ──────────────────────────────────
   const { user, isAutenticado } = useUserAuth();
+  const { progresso, consumirVouchersNoCheckout } = useFidelidadeService();
   const [mostrarModalPosCadastro, setMostrarModalPosCadastro] = useState(false);
   const [dadosUltimaReserva, setDadosUltimaReserva] = useState<{
     id: string;
@@ -59,23 +64,54 @@ export function PortalCliente() {
     getHorariosOcupados,
     criarReservaEmProcessamento,
     atualizarIdentificacao,
+    atualizarDadosCheckout,
     confirmarPagamento,
     liberarLock,
   } = useReservasService();
   const { getAvisosEscolinha } = useContratosService();
 
   // ── Valores calculados ──────────────────────────────────────────────────
-  const valorTotal = useMemo(
+  const valorTotalBruto = useMemo(
     () => calcularValorTotal(horariosSelecionados),
     [horariosSelecionados]
   );
-  const valorSinal = useMemo(() => calcularValorSinal(valorTotal), [valorTotal]);
+
+  const vouchersAtivosParaReserva = useMemo(() => {
+    return progresso.vouchersDisponiveis.filter((v) =>
+      vouchersSelecionadosIds.includes(v.id)
+    );
+  }, [vouchersSelecionadosIds, progresso.vouchersDisponiveis]);
+
+  const resultadoDesconto = useMemo(
+    () =>
+      vouchersAtivosParaReserva.length > 0
+        ? aplicarDescontoVouchers(valorTotalBruto, vouchersAtivosParaReserva)
+        : null,
+    [vouchersAtivosParaReserva, valorTotalBruto]
+  );
+
+  const valorTotal = resultadoDesconto ? resultadoDesconto.valorFinal : valorTotalBruto;
+  const valorSinal = useMemo(() => {
+    if (valorTotal === 0) return 0;
+    return calcularValorSinal(valorTotal);
+  }, [valorTotal]);
+
   const valorPendente = useMemo(
     () => calcularValorPendente(valorTotal),
     [valorTotal]
   );
 
   // ── Handlers ────────────────────────────────────────────────────────────
+
+  const handleToggleVoucher = useCallback((voucherId: string) => {
+    setVouchersSelecionadosIds((prev) =>
+      prev.includes(voucherId) ? prev.filter((id) => id !== voucherId) : [...prev, voucherId]
+    );
+  }, []);
+
+  const handleLimparVouchers = useCallback(() => {
+    setVouchersSelecionadosIds([]);
+  }, []);
 
   const handleSelectData = useCallback((data: string) => {
     setDataSelecionada(data);
@@ -118,6 +154,7 @@ export function PortalCliente() {
   const handleLimpar = useCallback(() => {
     setHorariosSelecionados([]);
     setQuadraSelecionada(null);
+    setVouchersSelecionadosIds([]);
   }, []);
 
   const handleContinuar = useCallback(() => {
@@ -150,7 +187,7 @@ export function PortalCliente() {
     criarReservaEmProcessamento,
   ]);
 
-  /** Formulário de dados e escolha de pagamento confirmados → abre modal Pix */
+  /** Formulário de dados e escolha de pagamento confirmados */
   const handleFormConfirmar = useCallback(
     (dados: DadosIdentificacao, tipoPagamento: "sinal" | "integral") => {
       if (!reservaIdAtual) return;
@@ -163,9 +200,82 @@ export function PortalCliente() {
         esporte: dados.esporte || undefined,
         observacoes: dados.observacoes || undefined,
       });
+
+      const descontoVal = resultadoDesconto ? resultadoDesconto.valorDesconto : 0;
+      const isGratis = valorTotal === 0 && vouchersAtivosParaReserva.length > 0;
+      const codigosVouchers = vouchersAtivosParaReserva.map((v) => v.codigo);
+
+      atualizarDadosCheckout(reservaIdAtual, {
+        valorTotal,
+        valorSinal: isGratis ? 0 : (tipoPagamento === "integral" ? valorTotal : valorSinal),
+        valorPendente: isGratis ? 0 : (tipoPagamento === "integral" ? 0 : valorPendente),
+        valorOriginal: valorTotalBruto,
+        descontoFidelidade: descontoVal,
+        vouchersUtilizados: codigosVouchers,
+        reservaGratuitaFidelidade: isGratis,
+        metodoPagamento: isGratis
+          ? "fidelidade"
+          : vouchersAtivosParaReserva.length > 0
+          ? "misto"
+          : "pix",
+      });
+
+      // Se a reserva for 100% coberta pelos vouchers de fidelidade (valorTotal === 0)
+      if (isGratis) {
+        confirmarPagamento(reservaIdAtual, "integral");
+
+        // Consome os vouchers selecionados utilizados nesta reserva
+        void consumirVouchersNoCheckout(
+          vouchersAtivosParaReserva.map((v) => v.id),
+          reservaIdAtual
+        );
+        setVouchersSelecionadosIds([]);
+
+        // Se visitante sem conta, salva dados para convidar a criar senha
+        if (!isAutenticado && dados) {
+          setDadosUltimaReserva({
+            id: reservaIdAtual,
+            nome: dados.nome,
+            whatsapp: dados.whatsapp,
+          });
+          setMostrarModalPosCadastro(true);
+        }
+
+        // Reseta estado local
+        setEtapa(null);
+        setReservaIdAtual(null);
+        setDadosForm(null);
+        setHorariosSelecionados([]);
+        setQuadraSelecionada(null);
+
+        const qtdVch = vouchersAtivosParaReserva.length;
+        toast.success("Reserva Gratuita Confirmada! 🎉", {
+          description: `Sua reserva foi 100% coberta com ${
+            qtdVch > 1
+              ? `seus ${qtdVch} vouchers de fidelidade`
+              : "seu voucher de fidelidade"
+          }! Bom jogo!`,
+          duration: 7000,
+        });
+        return;
+      }
+
       setEtapa("pix");
     },
-    [reservaIdAtual, atualizarIdentificacao]
+    [
+      reservaIdAtual,
+      atualizarIdentificacao,
+      atualizarDadosCheckout,
+      valorTotal,
+      valorTotalBruto,
+      valorSinal,
+      valorPendente,
+      resultadoDesconto,
+      vouchersAtivosParaReserva,
+      confirmarPagamento,
+      consumirVouchersNoCheckout,
+      isAutenticado,
+    ]
   );
 
   /**
@@ -187,6 +297,15 @@ export function PortalCliente() {
       }
 
       confirmarPagamento(reservaIdAtual, tipo);
+
+      // Consome os vouchers de fidelidade selecionados se foram aplicados nesta reserva
+      if (vouchersAtivosParaReserva.length > 0 && reservaIdAtual) {
+        void consumirVouchersNoCheckout(
+          vouchersAtivosParaReserva.map((v) => v.id),
+          reservaIdAtual
+        );
+        setVouchersSelecionadosIds([]);
+      }
 
       // Se visitante sem conta, salva dados para convidar a criar senha
       if (!isAutenticado && dadosForm) {
@@ -215,7 +334,16 @@ export function PortalCliente() {
         duration: 6000,
       });
     },
-    [reservaIdAtual, confirmarPagamento, isAutenticado, dadosForm, dataSelecionada, horariosSelecionados]
+    [
+      reservaIdAtual,
+      confirmarPagamento,
+      isAutenticado,
+      dadosForm,
+      dataSelecionada,
+      horariosSelecionados,
+      vouchersAtivosParaReserva,
+      consumirVouchersNoCheckout,
+    ]
   );
 
   /** Cancela checkout e libera o lock */
@@ -233,11 +361,15 @@ export function PortalCliente() {
       quadraId={quadraSelecionada}
       data={dataSelecionada}
       horariosSelecionados={horariosSelecionados}
-      valorTotal={valorTotal}
-      valorSinal={valorSinal}
-      valorPendente={valorPendente}
+      valorTotal={valorTotalBruto}
+      valorSinal={calcularValorSinal(valorTotalBruto)}
+      valorPendente={calcularValorPendente(valorTotalBruto)}
       onContinuar={handleContinuar}
       onLimpar={handleLimpar}
+      vouchersSelecionadosIds={vouchersSelecionadosIds}
+      onToggleVoucher={handleToggleVoucher}
+      onLimparVouchers={handleLimparVouchers}
+      vouchersDisponiveis={progresso.vouchersDisponiveis}
     />
   );
 
@@ -385,15 +517,20 @@ export function PortalCliente() {
         </SheetContent>
       </Sheet>
 
-      {/* Modal: Formulário de identificação, resumo e escolha de pagamento */}
+      {/* Modal: Formulário de identificação, resumo, fidelidade e escolha de pagamento */}
       <FormularioIdentificacao
         open={etapa === "formulario"}
         quadraId={quadraSelecionada}
         data={dataSelecionada}
         horariosSelecionados={horariosSelecionados}
+        valorTotalBruto={valorTotalBruto}
         valorTotal={valorTotal}
         valorSinal={valorSinal}
         valorPendente={valorPendente}
+        vouchersDisponiveis={progresso.vouchersDisponiveis}
+        vouchersSelecionadosIds={vouchersSelecionadosIds}
+        onToggleVoucher={handleToggleVoucher}
+        onLimparVouchers={handleLimparVouchers}
         onClose={handleCancelarCheckout}
         onConfirmar={handleFormConfirmar}
       />

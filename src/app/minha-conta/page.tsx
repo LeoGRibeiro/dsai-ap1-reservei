@@ -35,8 +35,11 @@ import {
   Loader2,
   Sparkles,
   Users,
+  Gift,
 } from "lucide-react";
 import { useVagasService } from "@/hooks/useVagasService";
+import { useFidelidadeService } from "@/hooks/useFidelidadeService";
+import { CartelaFidelidadeTimeline } from "@/components/fidelidade/CartelaFidelidadeTimeline";
 import { ModalGerenciarVagas } from "@/components/vagas/ModalGerenciarVagas";
 import type { Reserva } from "@/store/useReservasStore";
 import {
@@ -53,6 +56,7 @@ export default function MinhaContaPage() {
   const { user, loading, logout, atualizarPerfil, excluirConta } = useUserAuth();
   const { reservas, cancelarReserva } = useReservasService();
   const { getTotalNovosInteressados } = useVagasService();
+  const { progresso, carregando: carregandoFidelidade, resgatarVoucher } = useFidelidadeService();
   const [reservaGerenciarVagas, setReservaGerenciarVagas] = useState<Reserva | null>(null);
   const [reservaParaCancelar, setReservaParaCancelar] = useState<Reserva | null>(null);
   const [cancelandoReserva, setCancelandoReserva] = useState(false);
@@ -71,7 +75,7 @@ export default function MinhaContaPage() {
     }
   };
 
-  const [tabAtiva, setTabAtiva] = useState<"reservas" | "perfil" | "contato" | "seguranca">("reservas");
+  const [tabAtiva, setTabAtiva] = useState<"reservas" | "fidelidade" | "perfil" | "contato" | "seguranca">("reservas");
 
   // Estado edição de perfil
   const [editando, setEditando] = useState(false);
@@ -286,6 +290,27 @@ export default function MinhaContaPage() {
             >
               <CalendarCheck className="w-4 h-4" />
               Minhas Reservas ({userReservas.length})
+            </button>
+
+            <button
+              onClick={() => setTabAtiva("fidelidade")}
+              className={`pb-3 px-3 text-sm font-semibold transition-all border-b-2 flex items-center gap-2 shrink-0 ${
+                tabAtiva === "fidelidade"
+                  ? "border-emerald-500 text-emerald-400"
+                  : "border-transparent text-slate-400 hover:text-slate-200"
+              }`}
+            >
+              <Gift className="w-4 h-4" />
+              Fidelidade
+              {progresso.vouchersDisponiveis.length > 0 ? (
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                  {progresso.vouchersDisponiveis.length} prêmio(s)
+                </span>
+              ) : (
+                <span className="text-[10px] text-slate-500">
+                  ({progresso.totalHorasAtivas}/{progresso.horasNecessarias}h)
+                </span>
+              )}
             </button>
 
             <button
@@ -537,6 +562,17 @@ export default function MinhaContaPage() {
                 </div>
               )}
             </section>
+          </div>
+        )}
+
+        {/* ABA: FIDELIDADE */}
+        {tabAtiva === "fidelidade" && (
+          <div className="max-w-4xl space-y-8">
+            <CartelaFidelidadeTimeline
+              progresso={progresso}
+              carregando={carregandoFidelidade}
+              onResgatarVoucher={resgatarVoucher}
+            />
           </div>
         )}
 

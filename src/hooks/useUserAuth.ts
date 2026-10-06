@@ -23,6 +23,14 @@ export function useUserAuth() {
     async function carregarSessao() {
       try {
         const u = await obterUsuarioAtual();
+        if (u && u.id.startsWith("usr_demo_")) {
+          await logoutUsuarioSupabase();
+          if (isMounted) {
+            setUser(null);
+            setLoading(false);
+          }
+          return;
+        }
         if (isMounted) {
           setUser(u);
           setLoading(false);

@@ -213,6 +213,8 @@ function BlocoReserva({
               ? "🛡️ "
               : ehBloqueio
               ? "⚠️ "
+              : reserva.reservaGratuitaFidelidade || (reserva.descontoFidelidade && reserva.descontoFidelidade > 0)
+              ? "🎁 "
               : ""}
             {reserva.nomeCliente || "—"}
           </p>
@@ -229,6 +231,14 @@ function BlocoReserva({
             {ehBloqueio ? (
               <span className="text-[9px] px-1.5 py-0.5 rounded-full leading-none bg-amber-500/30 text-amber-300">
                 Bloqueio
+              </span>
+            ) : reserva.reservaGratuitaFidelidade ? (
+              <span className="text-[9px] px-1.5 py-0.5 rounded-full leading-none bg-purple-500/30 text-purple-300 font-bold">
+                100% Fidelidade
+              </span>
+            ) : reserva.descontoFidelidade && reserva.descontoFidelidade > 0 ? (
+              <span className="text-[9px] px-1.5 py-0.5 rounded-full leading-none bg-purple-500/30 text-purple-300 font-bold">
+                Voucher
               </span>
             ) : reserva.esporte ? (
               <span

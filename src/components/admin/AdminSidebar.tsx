@@ -18,15 +18,17 @@ import {
   Users,
   GraduationCap,
   UsersRound,
+  Gift,
 } from "lucide-react";
 
 export type AdminView =
   | "dashboard"
   | "agenda"
   | "usuarios"
-  | "financeiro"
   | "escolinhas"
-  | "grupos";
+  | "grupos"
+  | "fidelidade"
+  | "financeiro";
 
 interface NavItem {
   id: AdminView;
@@ -40,6 +42,7 @@ const NAV_ITEMS: NavItem[] = [
   { id: "usuarios", label: "Usuários", icon: Users },
   { id: "escolinhas", label: "Escolinhas", icon: GraduationCap },
   { id: "grupos", label: "Grupos", icon: UsersRound },
+  { id: "fidelidade", label: "Fidelidade", icon: Gift },
   { id: "financeiro", label: "Financeiro", icon: DollarSign },
 ];
 

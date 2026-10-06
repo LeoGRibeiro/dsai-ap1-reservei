@@ -57,9 +57,13 @@ export function calcularValorPendente(valorTotal: number): number {
   return Math.round(valorTotal * (1 - PERCENTUAL_SINAL) * 100) / 100;
 }
 
-/** Formata valor monetário em Real brasileiro */
+/** Formata valor monetário em Real brasileiro com proteção contra NaN e valores inválidos */
 export function formatarMoeda(valor: number): string {
-  return valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  const num = typeof valor === "number" ? valor : Number(valor);
+  if (isNaN(num) || !isFinite(num)) {
+    return (0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  }
+  return num.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
 /** Formata data ISO "YYYY-MM-DD" para exibição amigável */

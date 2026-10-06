@@ -661,6 +661,15 @@ export function AdminUsuariosPage() {
                               >
                                 {r.status}
                               </span>
+                              {r.reservaGratuitaFidelidade ? (
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-300 border border-purple-500/30">
+                                  🎁 100% Fidelidade
+                                </span>
+                              ) : r.descontoFidelidade && r.descontoFidelidade > 0 ? (
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-300 border border-purple-500/30">
+                                  🎁 -{formatarMoeda(r.descontoFidelidade)}
+                                </span>
+                              ) : null}
                             </div>
 
                             <p className="text-xs text-slate-400 flex items-center gap-2">
@@ -672,10 +681,12 @@ export function AdminUsuariosPage() {
                           <div className="flex items-center justify-between sm:justify-end gap-3 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-700/40">
                             <div className="text-left sm:text-right">
                               <p className="text-xs font-bold text-emerald-400">
-                                {formatarMoeda(r.valorTotal)}
+                                {r.reservaGratuitaFidelidade ? "R$ 0,00" : formatarMoeda(r.valorTotal)}
                               </p>
                               <p className="text-[10px] text-slate-500">
-                                {r.valorPendente === 0
+                                {r.reservaGratuitaFidelidade
+                                  ? "🎁 Voucher Fidelidade"
+                                  : r.valorPendente === 0
                                   ? "100% pago"
                                   : `Resta ${formatarMoeda(r.valorPendente)}`}
                               </p>
