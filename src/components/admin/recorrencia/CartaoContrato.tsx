@@ -29,12 +29,22 @@ export function CartaoContrato({ contrato, sessoesFuturas, children }: Props) {
       }`}
     >
       <header className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h3 className="text-base font-bold text-white">{contrato.nome}</h3>
-          <p className="text-xs text-slate-500 mt-0.5">
-            {contrato.esporte ?? "Esporte não informado"} ·{" "}
-            {contrato.tipo === "escolinha" ? "Escolinha" : "Grupo comum"}
-          </p>
+        <div className="flex items-center gap-3">
+          {contrato.fotoUrl && (
+            <img
+              src={contrato.fotoUrl}
+              alt={contrato.nome}
+              className="w-12 h-12 rounded-xl object-cover border border-slate-700 shrink-0"
+            />
+          )}
+          <div>
+            <h3 className="text-base font-bold text-white">{contrato.nome}</h3>
+            <p className="text-xs text-slate-500 mt-0.5">
+              {contrato.esporte ?? "Esporte não informado"} ·{" "}
+              {contrato.tipo === "escolinha" ? "Escolinha" : "Grupo comum"}
+              {contrato.faixaEtaria && ` · ${contrato.faixaEtaria}`}
+            </p>
+          </div>
         </div>
         <span
           className={`text-[11px] font-semibold px-2.5 py-1 rounded-full border ${

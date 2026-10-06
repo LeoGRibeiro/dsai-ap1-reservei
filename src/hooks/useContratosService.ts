@@ -301,34 +301,30 @@ export function useContratosService() {
   const atualizarContrato = useCallback(
     async (
       contratoId: string,
-      dados: {
-        nome: string;
-        esporte?: Esporte;
-        descricao?: string;
-        responsavelNome: string;
-        contatoWhatsapp: string;
-      }
+      dados: Partial<ContratoRecorrente>
     ): Promise<{ ok: boolean; motivo?: string }> => {
-      const nomeTrim = dados.nome.trim();
-      const respTrim = dados.responsavelNome.trim();
-      const whatsLimpo = dados.contatoWhatsapp.replace(/\D/g, "");
-
-      if (!nomeTrim) {
+      if (dados.nome !== undefined && !dados.nome.trim()) {
         return { ok: false, motivo: "O nome não pode estar vazio." };
       }
-      if (!respTrim) {
+      if (dados.responsavelNome !== undefined && !dados.responsavelNome.trim()) {
         return { ok: false, motivo: "Informe o nome do responsável." };
       }
-      if (whatsLimpo.length < 10) {
-        return { ok: false, motivo: "Informe um WhatsApp válido com DDD." };
+      if (dados.contatoWhatsapp !== undefined) {
+        const whatsLimpo = dados.contatoWhatsapp.replace(/\D/g, "");
+        if (whatsLimpo.length < 10) {
+          return { ok: false, motivo: "Informe um WhatsApp válido com DDD." };
+        }
       }
 
       const atualizacaoContrato: Partial<ContratoRecorrente> = {
-        nome: nomeTrim,
-        esporte: dados.esporte || undefined,
-        descricao: dados.descricao?.trim() || undefined,
-        responsavelNome: respTrim,
-        contatoWhatsapp: dados.contatoWhatsapp,
+        ...(dados.nome !== undefined ? { nome: dados.nome.trim() } : {}),
+        ...(dados.esporte !== undefined ? { esporte: dados.esporte } : {}),
+        ...(dados.descricao !== undefined ? { descricao: dados.descricao.trim() || undefined } : {}),
+        ...(dados.responsavelNome !== undefined ? { responsavelNome: dados.responsavelNome.trim() } : {}),
+        ...(dados.contatoWhatsapp !== undefined ? { contatoWhatsapp: dados.contatoWhatsapp } : {}),
+        ...(dados.fotoUrl !== undefined ? { fotoUrl: dados.fotoUrl } : {}),
+        ...(dados.faixaEtaria !== undefined ? { faixaEtaria: dados.faixaEtaria } : {}),
+        ...(dados.ativo !== undefined ? { ativo: dados.ativo } : {}),
       };
 
       if (isSupabaseConfigured()) {
@@ -343,10 +339,10 @@ export function useContratosService() {
         const ids = futuras.map((r) => r.id);
         if (ids.length > 0) {
           const updateReserva: Partial<Reserva> = {
-            nomeCliente: nomeTrim,
-            esporte: dados.esporte || undefined,
-            whatsappCliente: dados.contatoWhatsapp,
-            observacoes: dados.descricao?.trim() || undefined,
+            ...(dados.nome !== undefined ? { nomeCliente: dados.nome.trim() } : {}),
+            ...(dados.esporte !== undefined ? { esporte: dados.esporte } : {}),
+            ...(dados.contatoWhatsapp !== undefined ? { whatsappCliente: dados.contatoWhatsapp } : {}),
+            ...(dados.descricao !== undefined ? { observacoes: dados.descricao.trim() || undefined } : {}),
           };
           await atualizarReservasEmLoteSupabase(ids, updateReserva);
         }
@@ -358,10 +354,10 @@ export function useContratosService() {
           if (r.contratoId !== contratoId) return r;
           return {
             ...r,
-            nomeCliente: nomeTrim,
-            esporte: dados.esporte || undefined,
-            whatsappCliente: dados.contatoWhatsapp,
-            observacoes: dados.descricao?.trim() || undefined,
+            ...(dados.nome !== undefined ? { nomeCliente: dados.nome.trim() } : {}),
+            ...(dados.esporte !== undefined ? { esporte: dados.esporte } : {}),
+            ...(dados.contatoWhatsapp !== undefined ? { whatsappCliente: dados.contatoWhatsapp } : {}),
+            ...(dados.descricao !== undefined ? { observacoes: dados.descricao.trim() || undefined } : {}),
           };
         }),
       }));

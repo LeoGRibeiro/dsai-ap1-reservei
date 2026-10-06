@@ -3,9 +3,7 @@
 import { useState, useCallback, useMemo } from "react";
 import { toast } from "sonner";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import Link from "next/link";
 import { User, Sparkles, Gift } from "lucide-react";
-import { Button } from "@/components/ui/button";
 
 import { CalendarioSelector } from "./CalendarioSelector";
 import { QuadraHorarioItem } from "./QuadraHorarioItem";
@@ -14,6 +12,15 @@ import { FormularioIdentificacao, type DadosIdentificacao } from "./FormularioId
 import { ModalPix } from "./ModalPix";
 import { ModalPosReservaCadastro } from "./ModalPosReservaCadastro";
 import { MuralVagasAbertas } from "@/components/vagas/MuralVagasAbertas";
+import { LandingHeader } from "@/components/landing/LandingHeader";
+import { LandingFooter } from "@/components/landing/LandingFooter";
+import { LandingSecoesPlaceholder } from "@/components/landing/LandingSecoesPlaceholder";
+import { SecaoEstrutura } from "@/components/landing/SecaoEstrutura";
+import { SecaoEscolinhas } from "@/components/landing/SecaoEscolinhas";
+import { CabecalhoReserva, ID_TITULO_RESERVA } from "@/components/landing/CabecalhoReserva";
+import { BotaoVoltarAoTopo } from "@/components/landing/BotaoVoltarAoTopo";
+import { SmoothScrollProvider } from "@/components/landing/SmoothScrollProvider";
+import { SECAO_IDS } from "@/lib/landingPage/secoes";
 
 import { useReservasService } from "@/hooks/useReservasService";
 import { useContratosService } from "@/hooks/useContratosService";
@@ -393,70 +400,22 @@ export function PortalCliente() {
   );
 
   return (
-    <>
+    <SmoothScrollProvider>
       <div className="min-h-screen bg-slate-950">
-        {/* ── Header ──────────────────────────────────────────────────── */}
-        <header className="sticky top-0 z-30 border-b border-slate-800 bg-slate-950/80 backdrop-blur-md">
-          <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="text-2xl">🏟️</span>
-              <div>
-                <span className="font-black text-white text-lg tracking-tight">
-                  Reservei
-                </span>
-                <span className="hidden sm:inline text-slate-500 text-sm ml-2">
-                  · Complexo Esportivo
-                </span>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              {user ? (
-                <Link href="/minha-conta">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="bg-slate-900 border-slate-700 hover:border-emerald-500/50 text-slate-200 hover:text-white rounded-full px-3.5 py-1 text-xs flex items-center gap-2"
-                  >
-                    <div className="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-[10px]">
-                      {user.nome.charAt(0).toUpperCase()}
-                    </div>
-                    <span className="font-semibold max-w-[100px] truncate sm:max-w-none">
-                      {user.nome.split(" ")[0]}
-                    </span>
-                    <span className="text-[10px] text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded-full hidden sm:inline">
-                      Minhas Reservas
-                    </span>
-                  </Button>
-                </Link>
-              ) : (
-                <div className="flex items-center gap-2">
-                  <Link href="/login">
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="text-slate-300 hover:text-white text-xs font-semibold px-3 py-1"
-                    >
-                      Entrar
-                    </Button>
-                  </Link>
-                  <Link href="/cadastro">
-                    <Button
-                      size="sm"
-                      className="bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold rounded-full text-xs px-3.5 py-1 shadow-md shadow-emerald-500/10"
-                    >
-                      Criar Conta
-                    </Button>
-                  </Link>
-                </div>
-              )}
-            </div>
-          </div>
-        </header>
+        {/* ── Header (navegação da Landing Page) ────────────────────────── */}
+        <LandingHeader />
 
-        {/* ── Layout Principal ─────────────────────────────────────────── */}
+        {/* ── Seção Início: fluxo de reserva SEMPRE em primeiro lugar ────── */}
+        <section
+          id={SECAO_IDS.INICIO}
+          aria-labelledby={ID_TITULO_RESERVA}
+          className="scroll-mt-20"
+        >
         <div className="max-w-7xl mx-auto px-4 py-6 md:grid md:grid-cols-[1fr_320px] lg:grid-cols-[1fr_360px] md:gap-6 lg:gap-8 md:items-start">
           {/* Coluna esquerda: seleção */}
-          <main className="space-y-6 pb-28 md:pb-6">
+          <main className="space-y-6 pb-10 md:pb-6">
+            {/* Título compacto da reserva (único h1 da página) */}
+            <CabecalhoReserva />
             {/* Alerta de conta bloqueada */}
             {user?.bloqueado && (
               <div className="bg-red-950/40 border border-red-500/30 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 text-red-200 shadow-lg">
@@ -541,6 +500,19 @@ export function PortalCliente() {
             <MuralVagasAbertas />
           </aside>
         </div>
+        </section>
+
+        {/* ── Seção: O Local e Estrutura (Galeria e Apresentação) ──────── */}
+        <SecaoEstrutura />
+
+        {/* ── Seção: Escolinhas e Aulas Esportivas ─────────────────────── */}
+        <SecaoEscolinhas />
+
+        {/* ── Seções institucionais futuras (placeholders das próximas specs) ── */}
+        <LandingSecoesPlaceholder />
+
+        {/* ── Rodapé ─────────────────────────────────────────────────── */}
+        <LandingFooter />
 
         {/* Botão flutuante carrinho (mobile) */}
         <BotaoCarrinhoMobile
@@ -548,6 +520,9 @@ export function PortalCliente() {
           valorSinal={valorSinal}
           onClick={() => setIsCarrinhoOpen(true)}
         />
+
+        {/* Botão flutuante para retorno suave ao topo */}
+        <BotaoVoltarAoTopo />
       </div>
 
       {/* Sheet mobile do carrinho */}
@@ -604,6 +579,6 @@ export function PortalCliente() {
           onSucesso={() => setMostrarModalPosCadastro(false)}
         />
       )}
-    </>
+    </SmoothScrollProvider>
   );
 }

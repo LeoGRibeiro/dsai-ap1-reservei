@@ -19,6 +19,8 @@ export interface ContratoDbRow {
   hora_fim: string;
   data_inicio: string;
   meses: number | string;
+  foto_url?: string | null;
+  faixa_etaria?: string | null;
   ativo: boolean;
   criado_em?: string;
 }
@@ -52,6 +54,8 @@ export function rowToContrato(row: ContratoDbRow): ContratoRecorrente {
     horaFim: row.hora_fim,
     dataInicio: typeof row.data_inicio === "string" ? row.data_inicio.split("T")[0] : String(row.data_inicio),
     meses: Number(row.meses),
+    fotoUrl: row.foto_url || undefined,
+    faixaEtaria: row.faixa_etaria || undefined,
     ativo: Boolean(row.ativo),
     criadoEm: row.criado_em ?? new Date().toISOString(),
   };
@@ -73,6 +77,8 @@ export function contratoToRow(contrato: Partial<ContratoRecorrente>): Record<str
   if (contrato.horaFim !== undefined) row.hora_fim = contrato.horaFim;
   if (contrato.dataInicio !== undefined) row.data_inicio = contrato.dataInicio;
   if (contrato.meses !== undefined) row.meses = contrato.meses;
+  if (contrato.fotoUrl !== undefined) row.foto_url = contrato.fotoUrl ?? null;
+  if (contrato.faixaEtaria !== undefined) row.faixa_etaria = contrato.faixaEtaria ?? null;
   if (contrato.ativo !== undefined) row.ativo = contrato.ativo;
   if (contrato.criadoEm !== undefined) row.criado_em = contrato.criadoEm;
 

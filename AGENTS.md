@@ -88,6 +88,9 @@ Sempre que uma especificação ou implementação adicionar, alterar ou remover 
 
 **Ação Obrigatória:**
 1. **Atualizar o Schema do Projeto**: Manter o arquivo `src/lib/supabase/schema.sql` devidamente sincronizado com as alterações.
-2. **Fornecer o Script SQL Proativamente**: Incluir obrigatoriamente na resposta um bloco de código SQL isolado, pronto para copiar e colar, contendo os comandos exatos (`ALTER TABLE`, `CREATE TABLE`, etc.) que devem ser executados no **SQL Editor do Supabase**.
-3. **Instruções Claras de Aplicação**: Alertar expressamente o usuário de que o script precisa ser executado no Supabase para que a funcionalidade persista e funcione sem falhas.
+2. **Aviso Imediato e Destaque Visual**: Alertar o usuário logo no início da resposta (com banner de atenção evidente) de que a funcionalidade exigiu novas tabelas ou colunas no Supabase.
+3. **Fornecer o Script SQL Proativamente**: Incluir obrigatoriamente na resposta um bloco de código SQL isolado, pronto para copiar e colar, contendo os comandos exatos (`CREATE TABLE`, `ALTER TABLE`, RLS, etc.) que devem ser executados no **SQL Editor do Supabase**.
+4. **Instruções Claras de Aplicação e Persistência**: Alertar expressamente o usuário de que, embora o frontend possua mocks/fallbacks para a tela não quebrar, os dados só persistirão de forma definitiva na nuvem após a execução do script no Supabase.
+5. **Acompanhamento até a Confirmação**: Em iterações e refinamentos subsequentes da mesma feature, manter o lembrete de aplicação do script SQL até o usuário confirmar expressamente que executou a migração no Supabase.
+
 

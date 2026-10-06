@@ -166,9 +166,14 @@ CREATE TABLE IF NOT EXISTS public.contratos_recorrentes (
   hora_fim TEXT NOT NULL,
   data_inicio DATE NOT NULL,
   meses INTEGER NOT NULL DEFAULT 6,
+  foto_url TEXT,
+  faixa_etaria TEXT,
   ativo BOOLEAN NOT NULL DEFAULT TRUE,
   criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE public.contratos_recorrentes ADD COLUMN IF NOT EXISTS foto_url TEXT;
+ALTER TABLE public.contratos_recorrentes ADD COLUMN IF NOT EXISTS faixa_etaria TEXT;
 
 CREATE INDEX IF NOT EXISTS idx_contratos_tipo ON public.contratos_recorrentes (tipo, ativo);
 
@@ -338,3 +343,114 @@ ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS motivo_bloqueio TEXT;
 
 ALTER TABLE public.usuarios ADD COLUMN IF NOT EXISTS bloqueado BOOLEAN DEFAULT FALSE;
 ALTER TABLE public.usuarios ADD COLUMN IF NOT EXISTS motivo_bloqueio TEXT;
+
+
+-- ==============================================================================
+-- Landing Page: Conteúdo Institucional (Estrutura e Escolinhas)
+-- Spec: SPEC/2026-10-06-lp-conteudo-institucional.md
+-- ==============================================================================
+
+-- 1. Tabela de Galeria de Fotos da Estrutura Física
+CREATE TABLE IF NOT EXISTS public.landing_page_gallery (
+  id TEXT PRIMARY KEY,
+  image_url TEXT NOT NULL,
+  title TEXT NOT NULL,
+  description TEXT NOT NULL,
+  categoria TEXT NOT NULL DEFAULT 'quadras',
+  display_order INTEGER NOT NULL DEFAULT 0,
+  is_active BOOLEAN NOT NULL DEFAULT true,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_lp_gallery_order ON public.landing_page_gallery (display_order, is_active);
+CREATE INDEX IF NOT EXISTS idx_lp_gallery_categoria ON public.landing_page_gallery (categoria);
+
+-- Habilitar RLS em landing_page_gallery
+ALTER TABLE public.landing_page_gallery ENABLE ROW LEVEL SECURITY;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE tablename = 'landing_page_gallery' AND policyname = 'Permitir leitura pública de fotos da galeria'
+  ) THEN
+    CREATE POLICY "Permitir leitura pública de fotos da galeria"
+      ON public.landing_page_gallery FOR SELECT
+      USING (true);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE tablename = 'landing_page_gallery' AND policyname = 'Permitir gestão completa de fotos da galeria'
+  ) THEN
+    CREATE POLICY "Permitir gestão completa de fotos da galeria"
+      ON public.landing_page_gallery FOR ALL
+      USING (true)
+      WITH CHECK (true);
+  END IF;
+END $$;
+
+-- 2. Tabela de Escolinhas Esportivas
+CREATE TABLE IF NOT EXISTS public.landing_page_schools (
+  id TEXT PRIMARY KEY,
+  contrato_id TEXT,
+  sport_name TEXT NOT NULL,
+  teacher_name TEXT NOT NULL,
+  teacher_image_url TEXT NOT NULL,
+  schedule_info TEXT NOT NULL,
+  whatsapp_number TEXT NOT NULL,
+  descricao TEXT,
+  faixa_etaria TEXT,
+  is_active BOOLEAN NOT NULL DEFAULT true,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+ALTER TABLE public.landing_page_schools ADD COLUMN IF NOT EXISTS contrato_id TEXT;
+CREATE INDEX IF NOT EXISTS idx_lp_schools_active ON public.landing_page_schools (is_active, sport_name);
+CREATE INDEX IF NOT EXISTS idx_lp_schools_contrato ON public.landing_page_schools (contrato_id);
+
+-- Habilitar RLS em landing_page_schools
+ALTER TABLE public.landing_page_schools ENABLE ROW LEVEL SECURITY;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE tablename = 'landing_page_schools' AND policyname = 'Permitir leitura pública de escolinhas'
+  ) THEN
+    CREATE POLICY "Permitir leitura pública de escolinhas"
+      ON public.landing_page_schools FOR SELECT
+      USING (true);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE tablename = 'landing_page_schools' AND policyname = 'Permitir gestão completa de escolinhas'
+  ) THEN
+    CREATE POLICY "Permitir gestão completa de escolinhas"
+      ON public.landing_page_schools FOR ALL
+      USING (true)
+      WITH CHECK (true);
+  END IF;
+END $$;
+
+-- 3. Storage Bucket para fotos institucionais
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('institucional', 'institucional', true)
+ON CONFLICT (id) DO NOTHING;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE tablename = 'objects' AND schemaname = 'storage' AND policyname = 'Permitir leitura pública do bucket institucional'
+  ) THEN
+    CREATE POLICY "Permitir leitura pública do bucket institucional"
+      ON storage.objects FOR SELECT
+      USING (bucket_id = 'institucional');
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE tablename = 'objects' AND schemaname = 'storage' AND policyname = 'Permitir upload no bucket institucional'
+  ) THEN
+    CREATE POLICY "Permitir upload no bucket institucional"
+      ON storage.objects FOR INSERT
+      WITH CHECK (bucket_id = 'institucional');
+  END IF;
+END $$;
+

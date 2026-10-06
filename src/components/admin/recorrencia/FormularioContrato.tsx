@@ -6,7 +6,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Loader2 } from "lucide-react";
+import { Loader2, Upload } from "lucide-react";
 import { ESPORTES, HORARIOS_DISPONIVEIS, QUADRAS, type Esporte } from "@/lib/quadras";
 import { getHoje, mascaraWhatsApp } from "@/lib/constants";
 import { horariosFimDisponiveis, expandirHorarios, gerarDatasRecorrentes } from "@/lib/recorrencia/ocorrencias";
@@ -20,6 +20,7 @@ import {
   type TipoContrato,
 } from "@/lib/recorrencia/types";
 import type { ResultadoCriarContrato } from "@/hooks/useContratosService";
+import { uploadImagemInstitucional } from "@/lib/supabase/institucionalRepository";
 
 interface Props {
   tipo: TipoContrato;
@@ -60,6 +61,9 @@ export function FormularioContrato({ tipo, onSubmit, onSucesso, onCancelar }: Pr
   const [horaFim, setHoraFim] = useState("16:00");
   const [dataInicio, setDataInicio] = useState(hoje);
   const [meses, setMeses] = useState(MESES_PADRAO_CONTRATO);
+  const [fotoUrl, setFotoUrl] = useState("");
+  const [faixaEtaria, setFaixaEtaria] = useState("");
+  const [enviandoFoto, setEnviandoFoto] = useState(false);
 
   const [enviando, setEnviando] = useState(false);
   const [erros, setErros] = useState<string[]>([]);
@@ -75,6 +79,20 @@ export function FormularioContrato({ tipo, onSubmit, onSucesso, onCancelar }: Pr
     setDiasSemana((atual) =>
       atual.includes(dia) ? atual.filter((d) => d !== dia) : [...atual, dia].sort()
     );
+  }
+
+  async function handleUploadFoto(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setEnviandoFoto(true);
+    try {
+      const res = await uploadImagemInstitucional(file, "professores");
+      if (res.success && res.url) {
+        setFotoUrl(res.url);
+      }
+    } finally {
+      setEnviandoFoto(false);
+    }
   }
 
   async function handleSubmit(evento: React.FormEvent) {
@@ -97,6 +115,8 @@ export function FormularioContrato({ tipo, onSubmit, onSucesso, onCancelar }: Pr
         horaFim,
         dataInicio,
         meses,
+        fotoUrl: tipo === "escolinha" ? (fotoUrl || undefined) : undefined,
+        faixaEtaria: tipo === "escolinha" ? (faixaEtaria || undefined) : undefined,
       });
 
       if (resultado.ok) {
@@ -197,18 +217,74 @@ export function FormularioContrato({ tipo, onSubmit, onSucesso, onCancelar }: Pr
         </div>
 
         {tipo === "escolinha" && (
-          <div className="sm:col-span-2">
-            <label htmlFor="escolinha-descricao" className={CLASSE_LABEL}>
-              Descrição <span className="text-slate-600">(exibida no &quot;saiba mais&quot; do portal)</span>
-            </label>
-            <textarea
-              id="escolinha-descricao"
-              className={`${CLASSE_INPUT} min-h-[80px] resize-y`}
-              value={descricao}
-              onChange={(e) => setDescricao(e.target.value)}
-              placeholder="Faixa etária, metodologia, valores da mensalidade, etc."
-            />
-          </div>
+          <>
+            <div className="sm:col-span-2">
+              <label htmlFor="escolinha-descricao" className={CLASSE_LABEL}>
+                Descrição <span className="text-slate-600">(exibida no &quot;saiba mais&quot; do portal e na Landing Page)</span>
+              </label>
+              <textarea
+                id="escolinha-descricao"
+                className={`${CLASSE_INPUT} min-h-[80px] resize-y`}
+                value={descricao}
+                onChange={(e) => setDescricao(e.target.value)}
+                placeholder="Metodologia, diferenciais, etc."
+              />
+            </div>
+
+            <div>
+              <label htmlFor="escolinha-faixa-etaria" className={CLASSE_LABEL}>
+                Faixa Etária <span className="text-slate-600">(Landing Page)</span>
+              </label>
+              <input
+                id="escolinha-faixa-etaria"
+                className={CLASSE_INPUT}
+                value={faixaEtaria}
+                onChange={(e) => setFaixaEtaria(e.target.value)}
+                placeholder="Ex.: Infantil (6 a 14 anos) ou Adulto"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="escolinha-foto" className={CLASSE_LABEL}>
+                Foto do Professor / Banner <span className="text-slate-600">(Landing Page)</span>
+              </label>
+              <div className="flex gap-2">
+                <input
+                  id="escolinha-foto"
+                  type="url"
+                  className={`${CLASSE_INPUT} flex-1`}
+                  value={fotoUrl}
+                  onChange={(e) => setFotoUrl(e.target.value)}
+                  placeholder="https://... ou faça upload"
+                />
+                <label className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-semibold cursor-pointer transition-colors shrink-0">
+                  {enviandoFoto ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-400" />
+                  ) : (
+                    <Upload className="w-3.5 h-3.5 text-emerald-400" />
+                  )}
+                  <span>{enviandoFoto ? "Enviando..." : "Upload"}</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleUploadFoto}
+                    className="hidden"
+                    disabled={enviandoFoto}
+                  />
+                </label>
+              </div>
+              {fotoUrl && (
+                <div className="mt-2 flex items-center gap-2">
+                  <img
+                    src={fotoUrl}
+                    alt="Prévia da foto"
+                    className="w-9 h-9 rounded-lg object-cover border border-slate-700"
+                  />
+                  <span className="text-xs text-slate-400">Prévia da imagem no site</span>
+                </div>
+              )}
+            </div>
+          </>
         )}
       </div>
 

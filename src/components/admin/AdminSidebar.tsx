@@ -19,12 +19,14 @@ import {
   GraduationCap,
   UsersRound,
   Gift,
+  Images,
 } from "lucide-react";
 
 export type AdminView =
   | "dashboard"
   | "agenda"
   | "usuarios"
+  | "institucional"
   | "escolinhas"
   | "grupos"
   | "fidelidade"
@@ -40,6 +42,7 @@ const NAV_ITEMS: NavItem[] = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { id: "agenda", label: "Agenda de Ocupação", icon: CalendarDays },
   { id: "usuarios", label: "Usuários", icon: Users },
+  { id: "institucional", label: "Institucional & LP", icon: Images },
   { id: "escolinhas", label: "Escolinhas", icon: GraduationCap },
   { id: "grupos", label: "Grupos", icon: UsersRound },
   { id: "fidelidade", label: "Fidelidade", icon: Gift },
