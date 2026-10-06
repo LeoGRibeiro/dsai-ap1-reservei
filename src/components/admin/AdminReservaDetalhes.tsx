@@ -29,8 +29,14 @@ import {
   Send,
   Shield,
   Sparkles,
+  ShieldCheck,
+  Wrench,
+  Gift,
+  Ticket,
 } from "lucide-react";
 import { useReservasStore } from "@/store/useReservasStore";
+import { useReservasService } from "@/hooks/useReservasService";
+import { toast } from "sonner";
 import { useAdminAuth } from "@/hooks/useAdminAuth";
 import { formatarMoeda, formatarDataExibicao } from "@/lib/constants";
 import { PREPARACAO_POR_ESPORTE } from "@/lib/quadras";
@@ -147,6 +153,33 @@ function BotoesWhatsApp({
     month: "long",
   });
 
+  const isRecorrente = Boolean(
+    reserva.contratoId ||
+    reserva.tipoReserva === "escolinha" ||
+    reserva.tipoReserva === "grupo"
+  );
+  const temFidelidade = Boolean(
+    !isRecorrente &&
+    ((reserva.descontoFidelidade && reserva.descontoFidelidade > 0) ||
+      reserva.reservaGratuitaFidelidade ||
+      (reserva.vouchersUtilizados && reserva.vouchersUtilizados.length > 0))
+  );
+  const ehGratisFidelidade = Boolean(
+    !isRecorrente &&
+    (reserva.reservaGratuitaFidelidade ||
+      reserva.metodoPagamento === "fidelidade" ||
+      (temFidelidade && reserva.valorTotal === 0))
+  );
+
+  const textoPagamentoConfirmacao =
+    ehGratisFidelidade
+      ? "100% Coberta pelo Programa de Fidelidade 🎉 (R$ 0,00)"
+      : isRecorrente
+      ? "Contrato Mensal / Recorrente ⚽"
+      : tipoPagamento === "integral"
+      ? "Integral — pago por completo ✅"
+      : `Sinal de *${formatarMoeda(reserva.valorSinal)}* pago ✅`;
+
   const msgConfirmacao =
     `Olá, *${reserva.nomeCliente}*! 👋\n\n` +
     `✅ Sua reserva no *Complexo Esportivo Reservei* está confirmada!\n\n` +
@@ -154,12 +187,8 @@ function BotoesWhatsApp({
     `• Quadra ${quadraNum} — ${dataFormatada}\n` +
     `• Horário: *${reserva.horaInicio} – ${reserva.horaFim}*\n` +
     (reserva.esporte ? `• Esporte: *${reserva.esporte}*\n` : ``) +
-    `\n💰 *Pagamento:* ${
-      tipoPagamento === "integral"
-        ? "Integral — pago por completo ✅"
-        : `Sinal de *${formatarMoeda(reserva.valorSinal)}* pago ✅`
-    }\n` +
-    (tipoPagamento === "sinal"
+    `\n💰 *Pagamento:* ${textoPagamentoConfirmacao}\n` +
+    (tipoPagamento === "sinal" && !ehGratisFidelidade && !isRecorrente
       ? `• Restante a pagar no local: *${formatarMoeda(reserva.valorPendente)}*\n`
       : ``) +
     `\nNos vemos lá! 🏟️`;
@@ -244,6 +273,14 @@ export function AdminReservaDetalhes({ reservaId }: { reservaId: string }) {
   const router = useRouter();
   const { autenticado } = useAdminAuth();
   const reservas = useReservasStore((s) => s.reservas);
+  const { confirmarPagamentoRestante } = useReservasService();
+
+  function handleMarcarComoPago() {
+    confirmarPagamentoRestante(reservaId);
+    toast.success("Pagamento confirmado com sucesso!", {
+      description: "A reserva foi marcada como paga integralmente.",
+    });
+  }
 
   // Proteção: redireciona para login se não autenticado
   useEffect(() => {
@@ -290,6 +327,24 @@ export function AdminReservaDetalhes({ reservaId }: { reservaId: string }) {
   const quadraNum = reserva.quadraId.replace("q", "");
   const tipoPagamento: "sinal" | "integral" =
     reserva.valorPendente === 0 ? "integral" : "sinal";
+
+  const isRecorrente = Boolean(
+    reserva.contratoId ||
+    reserva.tipoReserva === "escolinha" ||
+    reserva.tipoReserva === "grupo"
+  );
+  const temFidelidade = Boolean(
+    !isRecorrente &&
+    ((reserva.descontoFidelidade && reserva.descontoFidelidade > 0) ||
+      reserva.reservaGratuitaFidelidade ||
+      (reserva.vouchersUtilizados && reserva.vouchersUtilizados.length > 0))
+  );
+  const ehGratisFidelidade = Boolean(
+    !isRecorrente &&
+    (reserva.reservaGratuitaFidelidade ||
+      reserva.metodoPagamento === "fidelidade" ||
+      (temFidelidade && reserva.valorTotal === 0))
+  );
 
   const dataFormatada = formatarDataExibicao(reserva.data, {
     weekday: "long",
@@ -363,6 +418,29 @@ export function AdminReservaDetalhes({ reservaId }: { reservaId: string }) {
                 {reserva.esporte}
               </span>
             )}
+            {reserva.tipoReserva === "admin_manual" && (
+              <span className="px-3 py-1 bg-sky-500/10 border border-sky-500/20 rounded-full text-sm text-sky-400 flex items-center gap-1.5 font-medium">
+                <ShieldCheck className="w-3.5 h-3.5" />
+                Reserva Manual (Admin)
+              </span>
+            )}
+            {reserva.tipoReserva === "manutencao_bloqueio" && (
+              <span className="px-3 py-1 bg-amber-500/10 border border-amber-500/20 rounded-full text-sm text-amber-400 flex items-center gap-1.5 font-medium">
+                <Wrench className="w-3.5 h-3.5" />
+                Bloqueio de Manutenção
+              </span>
+            )}
+            {reserva.reservaGratuitaFidelidade ? (
+              <span className="px-3 py-1 bg-purple-500/20 border border-purple-500/30 rounded-full text-sm text-purple-300 flex items-center gap-1.5 font-bold">
+                <Gift className="w-3.5 h-3.5" />
+                100% Fidelidade (Grátis)
+              </span>
+            ) : reserva.descontoFidelidade && reserva.descontoFidelidade > 0 ? (
+              <span className="px-3 py-1 bg-purple-500/20 border border-purple-500/30 rounded-full text-sm text-purple-300 flex items-center gap-1.5 font-medium">
+                <Gift className="w-3.5 h-3.5" />
+                Voucher (-{formatarMoeda(reserva.descontoFidelidade)})
+              </span>
+            ) : null}
             <span
               className={`px-3 py-1 rounded-full border text-sm ${statusCfg.bg} ${statusCfg.text}`}
             >
@@ -481,22 +559,90 @@ export function AdminReservaDetalhes({ reservaId }: { reservaId: string }) {
           <div className="space-y-6">
             {/* Financeiro */}
             <SecaoCard titulo="Financeiro">
+              {/* Card detalhado de Abatimento se houver Fidelidade */}
+              {temFidelidade && (
+                <div className="mx-5 mb-3 p-3.5 rounded-xl bg-purple-500/10 border border-purple-500/30">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Gift className="w-4 h-4 text-purple-400" />
+                    <p className="text-xs font-bold text-purple-300 uppercase tracking-wide">
+                      {ehGratisFidelidade
+                        ? "Reserva 100% Coberta por Fidelidade"
+                        : "Desconto de Fidelidade Aplicado"}
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div>
+                      <span className="text-slate-400 block text-[11px]">Valor de Tabela:</span>
+                      <span className="text-slate-300 font-mono line-through">
+                        {formatarMoeda(
+                          reserva.valorOriginal !== undefined && !isNaN(Number(reserva.valorOriginal)) && Number(reserva.valorOriginal) > 0
+                            ? Number(reserva.valorOriginal)
+                            : (Number(reserva.valorTotal) || 0) + (Number(reserva.descontoFidelidade) || 0)
+                        )}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-purple-300 block text-[11px]">Abatimento Fidelidade:</span>
+                      <span className="text-purple-400 font-bold font-mono">
+                        -{formatarMoeda(Number(reserva.descontoFidelidade) || (Number(reserva.valorOriginal) || Number(reserva.valorTotal) || 0))}
+                      </span>
+                    </div>
+                  </div>
+
+                  {reserva.vouchersUtilizados && reserva.vouchersUtilizados.length > 0 && (
+                    <div className="mt-2.5 pt-2 border-t border-purple-500/20 flex items-center gap-1.5 flex-wrap">
+                      <Ticket className="w-3.5 h-3.5 text-purple-400 flex-shrink-0" />
+                      <span className="text-[11px] text-purple-300 font-medium">Vouchers Utilizados:</span>
+                      {reserva.vouchersUtilizados.map((cod) => (
+                        <span
+                          key={cod}
+                          className="px-1.5 py-0.5 rounded bg-purple-950 border border-purple-500/40 text-[10px] font-mono text-purple-200"
+                        >
+                          {cod}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
               <DetalheRow
                 icon={DollarSign}
-                label="Valor total"
-                value={formatarMoeda(reserva.valorTotal)}
+                label="Valor Líquido a Pagar"
+                value={
+                  ehGratisFidelidade ? (
+                    <span className="text-purple-400 font-bold">R$ 0,00 (100% Coberta)</span>
+                  ) : isRecorrente ? (
+                    <span className="text-amber-400 font-bold">
+                      {reserva.valorTotal > 0 ? formatarMoeda(reserva.valorTotal) : "Contrato Mensal"}
+                    </span>
+                  ) : (
+                    formatarMoeda(reserva.valorTotal)
+                  )
+                }
               />
               <DetalheRow
                 icon={Banknote}
                 label={
-                  tipoPagamento === "integral"
+                  ehGratisFidelidade
+                    ? "Forma de Pagamento"
+                    : isRecorrente
+                    ? "Tipo de Cobrança"
+                    : tipoPagamento === "integral"
                     ? "Pago (integral 100%)"
                     : "Sinal pago (40%)"
                 }
-                value={formatarMoeda(reserva.valorSinal)}
-                valueClass="text-emerald-400"
+                value={
+                  ehGratisFidelidade
+                    ? "🎁 100% Voucher Fidelidade"
+                    : isRecorrente
+                    ? "⚽ Contrato Recorrente"
+                    : formatarMoeda(reserva.valorSinal)
+                }
+                valueClass={ehGratisFidelidade ? "text-purple-400" : "text-emerald-400"}
               />
-              {tipoPagamento === "sinal" && (
+              {tipoPagamento === "sinal" && !ehGratisFidelidade && !isRecorrente && (
                 <DetalheRow
                   icon={AlertCircle}
                   label="Pendente no local (60%)"
@@ -509,12 +655,16 @@ export function AdminReservaDetalhes({ reservaId }: { reservaId: string }) {
               <div className="px-5 pb-5 pt-2">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs text-slate-500">
-                    {tipoPagamento === "integral"
+                    {ehGratisFidelidade
+                      ? "100% Coberta por Voucher"
+                      : isRecorrente
+                      ? "Contrato Recorrente"
+                      : tipoPagamento === "integral"
                       ? "Pago integralmente"
                       : "Progresso do pagamento"}
                   </span>
                   <span className="text-xs font-mono text-slate-300">
-                    {tipoPagamento === "integral"
+                    {ehGratisFidelidade || isRecorrente || tipoPagamento === "integral"
                       ? "100%"
                       : `${Math.round(
                           (reserva.valorSinal / reserva.valorTotal) * 100
@@ -524,13 +674,17 @@ export function AdminReservaDetalhes({ reservaId }: { reservaId: string }) {
                 <div className="h-2.5 bg-slate-800 rounded-full overflow-hidden">
                   <div
                     className={`h-full rounded-full transition-all duration-700 ${
-                      tipoPagamento === "integral"
+                      ehGratisFidelidade
+                        ? "bg-purple-500"
+                        : isRecorrente
+                        ? "bg-amber-500"
+                        : tipoPagamento === "integral"
                         ? "bg-emerald-500"
                         : "bg-amber-500"
                     }`}
                     style={{
                       width:
-                        tipoPagamento === "integral"
+                        ehGratisFidelidade || isRecorrente || tipoPagamento === "integral"
                           ? "100%"
                           : `${Math.round(
                               (reserva.valorSinal / reserva.valorTotal) * 100
@@ -539,6 +693,21 @@ export function AdminReservaDetalhes({ reservaId }: { reservaId: string }) {
                   />
                 </div>
               </div>
+
+              {/* Botão de Marcar como Pago */}
+              {reserva.valorPendente > 0 && !reserva.reservaGratuitaFidelidade && reserva.status !== "cancelada" && (
+                <div className="px-5 pb-5">
+                  <button
+                    type="button"
+                    id="admin-detalhe-marcar-pago-btn"
+                    onClick={handleMarcarComoPago}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-sm shadow-lg shadow-emerald-500/20 active:scale-[0.98] transition-all cursor-pointer"
+                  >
+                    <CheckCircle2 className="w-4 h-4" />
+                    Marcar como Pago (Quitar {formatarMoeda(reserva.valorPendente)})
+                  </button>
+                </div>
+              )}
             </SecaoCard>
 
             {/* Notificação / WhatsApp */}

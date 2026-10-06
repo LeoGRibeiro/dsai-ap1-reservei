@@ -1,5 +1,6 @@
 import type { Reserva, StatusReserva, StatusWhatsApp } from "@/store/useReservasStore";
 import type { Esporte } from "@/lib/quadras";
+import type { TipoReserva } from "@/lib/recorrencia/types";
 
 export interface ReservaDbRow {
   id: string;
@@ -26,6 +27,16 @@ export interface ReservaDbRow {
   valorSinal?: number | string;
   valor_pendente?: number | string;
   valorPendente?: number | string;
+  valor_original?: number | string;
+  valorOriginal?: number | string;
+  desconto_fidelidade?: number | string;
+  descontoFidelidade?: number | string;
+  vouchers_utilizados?: string[] | string;
+  vouchersUtilizados?: string[];
+  reserva_gratuita_fidelidade?: boolean;
+  reservaGratuitaFidelidade?: boolean;
+  metodo_pagamento?: string;
+  metodoPagamento?: string;
   status: string;
   status_whatsapp?: string;
   statusWhatsApp?: string;
@@ -33,6 +44,13 @@ export interface ReservaDbRow {
   criadaEm?: string;
   esporte?: string | null;
   observacoes?: string | null;
+  contrato_id?: string | null;
+  tipo_reserva?: string | null;
+  aviso_cancelamento_em?: string | null;
+  permite_vagas?: boolean | null;
+  permiteVagas?: boolean | null;
+  vagas_abertas?: number | string | null;
+  vagasAbertas?: number | string | null;
 }
 
 /**
@@ -86,14 +104,73 @@ export function rowToReserva(row: ReservaDbRow): Reserva {
     horarios: horariosArray,
     horaInicio,
     horaFim,
-    valorTotal: Number(row.valor_total ?? row.valorTotal ?? 0),
-    valorSinal: Number(row.valor_sinal ?? row.valorSinal ?? 0),
-    valorPendente: Number(row.valor_pendente ?? row.valorPendente ?? 0),
+    valorTotal: Number(row.valor_total ?? row.valorTotal ?? 0) || 0,
+    valorSinal: Number(row.valor_sinal ?? row.valorSinal ?? 0) || 0,
+    valorPendente: Number(row.valor_pendente ?? row.valorPendente ?? 0) || 0,
+    valorOriginal: (() => {
+      const v = row.valor_original !== undefined ? row.valor_original : row.valorOriginal;
+      if (v !== null && v !== undefined && v !== "") {
+        const num = Number(v);
+        return !isNaN(num) ? num : undefined;
+      }
+      return undefined;
+    })(),
+    descontoFidelidade: (() => {
+      const v = row.desconto_fidelidade !== undefined ? row.desconto_fidelidade : row.descontoFidelidade;
+      if (v !== null && v !== undefined && v !== "") {
+        const num = Number(v);
+        return !isNaN(num) ? num : undefined;
+      }
+      return undefined;
+    })(),
+    vouchersUtilizados: (() => {
+      const v = row.vouchers_utilizados ?? row.vouchersUtilizados;
+      if (Array.isArray(v)) return v;
+      if (typeof v === "string") {
+        try {
+          const parsed = JSON.parse(v);
+          if (Array.isArray(parsed)) return parsed;
+        } catch {
+          return v.replace(/[{}]/g, "").split(",").map((s) => s.trim()).filter(Boolean);
+        }
+      }
+      return undefined;
+    })(),
+    reservaGratuitaFidelidade: (() => {
+      const v =
+        row.reserva_gratuita_fidelidade !== undefined
+          ? row.reserva_gratuita_fidelidade
+          : row.reservaGratuitaFidelidade;
+      return v !== null && v !== undefined ? Boolean(v) : undefined;
+    })(),
+    metodoPagamento: (row.metodo_pagamento ?? row.metodoPagamento) as
+      | "pix"
+      | "fidelidade"
+      | "misto"
+      | "balcao"
+      | undefined,
     status: (row.status as StatusReserva) || "em_processamento",
     statusWhatsApp: (row.status_whatsapp ?? row.statusWhatsApp ?? "nao_enviado") as StatusWhatsApp,
     criadaEm: row.criada_em ?? row.criadaEm ?? new Date().toISOString(),
     esporte: (row.esporte as Esporte) || undefined,
     observacoes: row.observacoes || undefined,
+    contratoId: row.contrato_id || undefined,
+    tipoReserva: (row.tipo_reserva as TipoReserva) || undefined,
+    avisoCancelamentoEm: row.aviso_cancelamento_em
+      ? String(row.aviso_cancelamento_em).split("T")[0]
+      : undefined,
+    permiteVagas: (() => {
+      const v = row.permite_vagas !== undefined ? row.permite_vagas : row.permiteVagas;
+      return v !== null && v !== undefined ? Boolean(v) : undefined;
+    })(),
+    vagasAbertas: (() => {
+      const v = row.vagas_abertas !== undefined ? row.vagas_abertas : row.vagasAbertas;
+      if (v !== null && v !== undefined && v !== "") {
+        const num = Number(v);
+        return !isNaN(num) ? num : undefined;
+      }
+      return undefined;
+    })(),
   };
 }
 
@@ -127,11 +204,29 @@ export function reservaToRow(reserva: Partial<Reserva>): Record<string, unknown>
   if (reserva.valorTotal !== undefined) row.valor_total = reserva.valorTotal;
   if (reserva.valorSinal !== undefined) row.valor_sinal = reserva.valorSinal;
   if (reserva.valorPendente !== undefined) row.valor_pendente = reserva.valorPendente;
+  if (reserva.valorOriginal !== undefined) row.valor_original = reserva.valorOriginal;
+  if (reserva.descontoFidelidade !== undefined) row.desconto_fidelidade = reserva.descontoFidelidade;
+  if (reserva.vouchersUtilizados !== undefined) row.vouchers_utilizados = reserva.vouchersUtilizados;
+  if (reserva.reservaGratuitaFidelidade !== undefined) {
+    row.reserva_gratuita_fidelidade = reserva.reservaGratuitaFidelidade;
+  }
+  if (reserva.metodoPagamento !== undefined) row.metodo_pagamento = reserva.metodoPagamento;
   if (reserva.status !== undefined) row.status = reserva.status;
   if (reserva.statusWhatsApp !== undefined) row.status_whatsapp = reserva.statusWhatsApp;
   if (reserva.criadaEm !== undefined) row.criada_em = reserva.criadaEm;
   if (reserva.esporte !== undefined) row.esporte = reserva.esporte ?? null;
   if (reserva.observacoes !== undefined) row.observacoes = reserva.observacoes ?? null;
+  if (reserva.contratoId !== undefined) row.contrato_id = reserva.contratoId ?? null;
+  if (reserva.tipoReserva !== undefined) row.tipo_reserva = reserva.tipoReserva ?? null;
+  if (reserva.avisoCancelamentoEm !== undefined) {
+    row.aviso_cancelamento_em = reserva.avisoCancelamentoEm ?? null;
+  }
+  if (reserva.permiteVagas !== undefined) {
+    row.permite_vagas = reserva.permiteVagas;
+  }
+  if (reserva.vagasAbertas !== undefined) {
+    row.vagas_abertas = reserva.vagasAbertas;
+  }
 
   return row;
 }
@@ -142,4 +237,6 @@ export interface UserProfile {
   telefone: string;
   dataNascimento?: string | null;
   criadoEm?: string;
+  bloqueado?: boolean;
+  motivo_bloqueio?: string | null;
 }

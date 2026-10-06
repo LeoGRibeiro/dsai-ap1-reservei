@@ -34,7 +34,14 @@ import {
   ShieldAlert,
   Loader2,
   Sparkles,
+  Users,
+  Gift,
 } from "lucide-react";
+import { useVagasService } from "@/hooks/useVagasService";
+import { useFidelidadeService } from "@/hooks/useFidelidadeService";
+import { CartelaFidelidadeTimeline } from "@/components/fidelidade/CartelaFidelidadeTimeline";
+import { ModalGerenciarVagas } from "@/components/vagas/ModalGerenciarVagas";
+import type { Reserva } from "@/store/useReservasStore";
 import {
   Dialog,
   DialogContent,
@@ -48,8 +55,27 @@ export default function MinhaContaPage() {
   const router = useRouter();
   const { user, loading, logout, atualizarPerfil, excluirConta } = useUserAuth();
   const { reservas, cancelarReserva } = useReservasService();
+  const { getTotalNovosInteressados } = useVagasService();
+  const { progresso, carregando: carregandoFidelidade, resgatarVoucher } = useFidelidadeService();
+  const [reservaGerenciarVagas, setReservaGerenciarVagas] = useState<Reserva | null>(null);
+  const [reservaParaCancelar, setReservaParaCancelar] = useState<Reserva | null>(null);
+  const [cancelandoReserva, setCancelandoReserva] = useState(false);
 
-  const [tabAtiva, setTabAtiva] = useState<"reservas" | "perfil" | "contato" | "seguranca">("reservas");
+  const handleConfirmarCancelamento = async () => {
+    if (!reservaParaCancelar) return;
+    setCancelandoReserva(true);
+    try {
+      await cancelarReserva(reservaParaCancelar.id);
+      toast.success("Reserva cancelada com sucesso.");
+      setReservaParaCancelar(null);
+    } catch {
+      toast.error("Ocorreu um erro ao cancelar o agendamento.");
+    } finally {
+      setCancelandoReserva(false);
+    }
+  };
+
+  const [tabAtiva, setTabAtiva] = useState<"reservas" | "fidelidade" | "perfil" | "contato" | "seguranca">("reservas");
 
   // Estado edição de perfil
   const [editando, setEditando] = useState(false);
@@ -267,6 +293,27 @@ export default function MinhaContaPage() {
             </button>
 
             <button
+              onClick={() => setTabAtiva("fidelidade")}
+              className={`pb-3 px-3 text-sm font-semibold transition-all border-b-2 flex items-center gap-2 shrink-0 ${
+                tabAtiva === "fidelidade"
+                  ? "border-emerald-500 text-emerald-400"
+                  : "border-transparent text-slate-400 hover:text-slate-200"
+              }`}
+            >
+              <Gift className="w-4 h-4" />
+              Fidelidade
+              {progresso.vouchersDisponiveis.length > 0 ? (
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                  {progresso.vouchersDisponiveis.length} prêmio(s)
+                </span>
+              ) : (
+                <span className="text-[10px] text-slate-500">
+                  ({progresso.totalHorasAtivas}/{progresso.horasNecessarias}h)
+                </span>
+              )}
+            </button>
+
+            <button
               onClick={() => setTabAtiva("perfil")}
               className={`pb-3 px-3 text-sm font-semibold transition-all border-b-2 flex items-center gap-2 shrink-0 ${
                 tabAtiva === "perfil"
@@ -343,78 +390,127 @@ export default function MinhaContaPage() {
                     return (
                       <div
                         key={reserva.id}
-                        className="bg-slate-900 border border-slate-800 rounded-2xl p-5 hover:border-slate-700 transition-colors shadow-lg"
+                        className="bg-slate-900 border border-slate-800 rounded-2xl p-5 hover:border-slate-700 transition-colors shadow-lg flex flex-col justify-between"
                       >
-                        <div className="flex items-start justify-between">
-                          <div>
-                            <span className="text-xs font-semibold text-emerald-400 tracking-wider uppercase">
-                              Quadra {quadra?.numero || "Esportiva"}
-                            </span>
-                            <h3 className="font-bold text-white text-base mt-0.5">
-                              {quadra?.descricao || `Quadra ${quadra?.numero || "Poliesportiva"}`}
-                            </h3>
-                          </div>
-                          <span
-                            className={`px-2.5 py-1 rounded-full text-[11px] font-bold ${
-                              reserva.status === "confirmada"
-                                ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
-                                : "bg-amber-500/20 text-amber-300 border border-amber-500/30"
-                            }`}
-                          >
-                            {reserva.status === "confirmada" ? "Confirmada" : "Sinal Pago"}
-                          </span>
-                        </div>
-
-                        <div className="mt-4 space-y-2 text-xs text-slate-300">
-                          <div className="flex items-center gap-2">
-                            <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                            <span>{formatarDataExibicao(reserva.data)}</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Clock className="w-3.5 h-3.5 text-slate-400" />
-                            <span>
-                              {reserva.horaInicio} às {reserva.horaFim} ({reserva.horarios.length}h de jogo)
-                            </span>
-                          </div>
-                        </div>
-
-                        <div className="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between text-xs">
-                          <div>
-                            <span className="text-slate-500 block text-[10px]">Total</span>
-                            <span className="font-bold text-white">
-                              {formatarMoeda(reserva.valorTotal)}
-                            </span>
-                          </div>
-                          {reserva.valorPendente > 0 && (
-                            <div className="text-right">
-                              <span className="text-amber-400/80 block text-[10px]">Pendente no local</span>
-                              <span className="font-bold text-amber-400">
-                                {formatarMoeda(reserva.valorPendente)}
+                        <div>
+                          {/* Cabeçalho do Card: Quadra, Suporte e Status */}
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <span className="text-xs font-semibold text-emerald-400 tracking-wider uppercase">
+                                Quadra {quadra?.numero || "Esportiva"}
+                              </span>
+                              <h3 className="font-bold text-white text-base mt-0.5">
+                                {quadra?.descricao || `Quadra ${quadra?.numero || "Poliesportiva"}`}
+                              </h3>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <a
+                                href={`https://wa.me/${TELEFONE_COMPLEXO.replace(/\D/g, "")}?text=Olá,%20tenho%20uma%20dúvida%20sobre%20minha%20reserva%20no%20dia%20${reserva.data}%20(Quadra%20${quadra?.numero})`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-[11px] text-slate-400 hover:text-emerald-400 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-800/80 hover:bg-slate-800 border border-slate-700/60 transition-colors"
+                                title="Falar com o suporte no WhatsApp"
+                              >
+                                <MessageCircle className="w-3 h-3 text-emerald-400" />
+                                <span className="hidden sm:inline">Suporte</span>
+                              </a>
+                              <span
+                                className={`px-2.5 py-1 rounded-full text-[11px] font-bold ${
+                                  reserva.status === "confirmada"
+                                    ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                                    : "bg-amber-500/20 text-amber-300 border border-amber-500/30"
+                                }`}
+                              >
+                                {reserva.status === "confirmada" ? "Confirmada" : "Sinal Pago"}
                               </span>
                             </div>
-                          )}
+                          </div>
+
+                          <div className="mt-4 space-y-2.5 text-sm text-slate-200">
+                            <div className="flex items-center gap-2.5">
+                              <Calendar className="w-4 h-4 text-slate-400 shrink-0" />
+                              <span className="font-semibold text-white capitalize">{formatarDataExibicao(reserva.data)}</span>
+                            </div>
+                            <div className="flex items-center gap-2.5">
+                              <Clock className="w-4 h-4 text-slate-400 shrink-0" />
+                              <span className="font-medium text-slate-200">
+                                {reserva.horaInicio} às {reserva.horaFim}{" "}
+                                <span className="text-xs text-slate-400 font-normal">
+                                  ({reserva.horarios.length}h de jogo)
+                                </span>
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between">
+                            <div>
+                              <span className="text-slate-400 block text-xs font-medium">Total</span>
+                              <span className="text-lg sm:text-xl font-black text-white">
+                                {formatarMoeda(reserva.valorTotal)}
+                              </span>
+                            </div>
+                            {reserva.valorPendente > 0 && (
+                              <div className="text-right">
+                                <span className="text-amber-400/90 block text-xs font-medium">Pendente no local</span>
+                                <span className="text-lg sm:text-xl font-black text-amber-400">
+                                  {formatarMoeda(reserva.valorPendente)}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Bloco de Vagas Abertas: Status e Botão lado a lado */}
+                          <div className="mt-4 p-3 rounded-xl bg-slate-950/70 border border-slate-800/80 flex items-center justify-between gap-3 flex-wrap">
+                            <div className="flex items-center gap-2 flex-wrap min-w-0">
+                              <span className="text-[11px] text-slate-400 font-medium flex items-center gap-1">
+                                <Users className="w-3 h-3 text-slate-500" />
+                                Vagas:
+                              </span>
+                              {reserva.permiteVagas && (reserva.vagasAbertas ?? 0) > 0 ? (
+                                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
+                                  {reserva.vagasAbertas} {reserva.vagasAbertas === 1 ? "vaga aberta" : "vagas abertas"}
+                                </span>
+                              ) : (
+                                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-slate-800/60 text-slate-400 border border-slate-700/50">
+                                  Vagas fechadas
+                                </span>
+                              )}
+
+                              {getTotalNovosInteressados(reserva.id) > 0 && (
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-1.5">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                                  {getTotalNovosInteressados(reserva.id)} novo(s)
+                                </span>
+                              )}
+                            </div>
+
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => setReservaGerenciarVagas(reserva)}
+                              className="bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 hover:text-emerald-300 border border-emerald-500/30 font-bold text-xs h-7 px-3 rounded-lg flex items-center gap-1.5 shrink-0 transition-colors shadow-sm"
+                            >
+                              <Users className="w-3.5 h-3.5" />
+                              Gerenciar Vagas
+                            </Button>
+                          </div>
                         </div>
 
-                        <div className="mt-4 pt-3 border-t border-slate-800/60 flex items-center justify-between">
-                          <button
-                            onClick={() => {
-                              if (confirm("Deseja realmente cancelar este agendamento?")) {
-                                cancelarReserva(reserva.id);
-                                toast.success("Reserva cancelada com sucesso.");
-                              }
-                            }}
-                            className="text-xs text-red-400 hover:text-red-300 hover:underline"
+                        {/* Rodapé: Ação de Cancelamento com destaque */}
+                        <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between">
+                          <span className="text-[11px] text-slate-500">
+                            Código: <span className="font-mono text-slate-400">#{reserva.id.slice(0, 8)}</span>
+                          </span>
+
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => setReservaParaCancelar(reserva)}
+                            className="bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 border border-red-500/25 hover:border-red-500/40 rounded-xl font-bold text-xs h-8 px-3.5 flex items-center gap-1.5 transition-colors shadow-sm"
                           >
+                            <Trash2 className="w-3.5 h-3.5" />
                             Cancelar Reserva
-                          </button>
-                          <a
-                            href={`https://wa.me/${TELEFONE_COMPLEXO.replace(/\D/g, "")}?text=Olá,%20tenho%20uma%20dúvida%20sobre%20minha%20reserva%20no%20dia%20${reserva.data}`}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="text-xs text-slate-400 hover:text-white flex items-center gap-1"
-                          >
-                            <MessageCircle className="w-3 h-3 text-emerald-400" /> Suporte
-                          </a>
+                          </Button>
                         </div>
                       </div>
                     );
@@ -466,6 +562,17 @@ export default function MinhaContaPage() {
                 </div>
               )}
             </section>
+          </div>
+        )}
+
+        {/* ABA: FIDELIDADE */}
+        {tabAtiva === "fidelidade" && (
+          <div className="max-w-4xl space-y-8">
+            <CartelaFidelidadeTimeline
+              progresso={progresso}
+              carregando={carregandoFidelidade}
+              onResgatarVoucher={resgatarVoucher}
+            />
           </div>
         )}
 
@@ -691,6 +798,73 @@ export default function MinhaContaPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Modal de Confirmação de Cancelamento de Reserva */}
+      <Dialog open={Boolean(reservaParaCancelar)} onOpenChange={(open) => !open && setReservaParaCancelar(null)}>
+        <DialogContent className="bg-slate-900 border-slate-800 text-white max-w-md p-6">
+          <DialogHeader>
+            <DialogTitle className="text-red-400 flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-red-400" /> Cancelar Agendamento?
+            </DialogTitle>
+            <DialogDescription className="text-slate-400 text-xs mt-2">
+              Tem certeza que deseja cancelar esta reserva? Esta ação liberará a quadra e o horário no sistema para outros clientes.
+            </DialogDescription>
+          </DialogHeader>
+
+          {reservaParaCancelar && (
+            <div className="my-4 p-4 rounded-xl bg-slate-950/70 border border-slate-800 space-y-2 text-xs">
+              <div className="flex justify-between text-slate-300">
+                <span className="text-slate-500">Quadra:</span>
+                <span className="font-semibold text-white">
+                  {QUADRAS.find((q) => q.id === reservaParaCancelar.quadraId)?.descricao || `Quadra ${reservaParaCancelar.quadraId}`}
+                </span>
+              </div>
+              <div className="flex justify-between text-slate-300">
+                <span className="text-slate-500">Data:</span>
+                <span className="font-semibold text-white">{formatarDataExibicao(reservaParaCancelar.data)}</span>
+              </div>
+              <div className="flex justify-between text-slate-300">
+                <span className="text-slate-500">Horário:</span>
+                <span className="font-semibold text-white">
+                  {reservaParaCancelar.horaInicio} às {reservaParaCancelar.horaFim}
+                </span>
+              </div>
+              <div className="flex justify-between text-slate-300 pt-2 border-t border-slate-800">
+                <span className="text-slate-500">Valor Total:</span>
+                <span className="font-bold text-white">{formatarMoeda(reservaParaCancelar.valorTotal)}</span>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="mt-4 flex gap-2">
+            <Button
+              variant="ghost"
+              disabled={cancelandoReserva}
+              onClick={() => setReservaParaCancelar(null)}
+              className="text-slate-400 hover:text-white"
+            >
+              Manter Reserva
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={cancelandoReserva}
+              onClick={handleConfirmarCancelamento}
+              className="bg-red-600 hover:bg-red-700 font-bold text-xs"
+            >
+              {cancelandoReserva ? "Cancelando..." : "Confirmar Cancelamento"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de Gerenciamento de Vagas Abertas da Reserva */}
+      {reservaGerenciarVagas && (
+        <ModalGerenciarVagas
+          open={Boolean(reservaGerenciarVagas)}
+          onClose={() => setReservaGerenciarVagas(null)}
+          reserva={reservaGerenciarVagas}
+        />
+      )}
     </div>
   );
 }

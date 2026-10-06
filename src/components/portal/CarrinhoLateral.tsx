@@ -10,7 +10,9 @@ import {
   ENDERECO_COMPLEXO,
 } from "@/lib/constants";
 import { QUADRAS } from "@/lib/quadras";
-import { ShoppingCart, MapPin, Calendar, Clock, Trash2 } from "lucide-react";
+import { ShoppingCart, MapPin, Calendar, Clock, Trash2, Gift, Ticket, Check, X } from "lucide-react";
+import type { VoucherFidelidade } from "@/lib/fidelidade/types";
+import { aplicarDescontoVouchers } from "@/lib/fidelidade/fidelidadeService";
 
 interface Props {
   quadraId: string | null;
@@ -24,6 +26,16 @@ interface Props {
   // Mobile: controla abertura do drawer
   isOpen?: boolean;
   onToggle?: () => void;
+  // Fidelidade: vouchers selecionados individualmente
+  vouchersSelecionadosIds?: string[];
+  onToggleVoucher?: (voucherId: string) => void;
+  onLimparVouchers?: () => void;
+  vouchersDisponiveis?: VoucherFidelidade[];
+  // Retrocompatibilidade
+  vouchersAplicados?: boolean;
+  onToggleVouchers?: (aplicar: boolean) => void;
+  voucherAplicado?: VoucherFidelidade | null;
+  onSelecionarVoucher?: (voucher: VoucherFidelidade | null) => void;
 }
 
 export function CarrinhoLateral({
@@ -35,9 +47,36 @@ export function CarrinhoLateral({
   valorPendente,
   onContinuar,
   onLimpar,
+  vouchersSelecionadosIds,
+  onToggleVoucher,
+  onLimparVouchers,
+  vouchersDisponiveis = [],
+  vouchersAplicados,
+  onToggleVouchers,
+  voucherAplicado,
+  onSelecionarVoucher,
 }: Props) {
   const quadra = QUADRAS.find((q) => q.id === quadraId);
   const temItens = (horariosSelecionados ?? []).length > 0;
+
+  const vouchersParaAplicar =
+    vouchersSelecionadosIds !== undefined
+      ? vouchersDisponiveis.filter((v) => vouchersSelecionadosIds.includes(v.id))
+      : (vouchersAplicados !== undefined ? vouchersAplicados : !!voucherAplicado)
+      ? vouchersDisponiveis
+      : [];
+
+  // Cálculo com os vouchers selecionados
+  const resultadoDesconto = vouchersParaAplicar.length > 0
+    ? aplicarDescontoVouchers(valorTotal, vouchersParaAplicar)
+    : null;
+  const valorTotalFinal = resultadoDesconto ? resultadoDesconto.valorFinal : valorTotal;
+  const valorSinalFinal = resultadoDesconto
+    ? Math.round(valorTotalFinal * PERCENTUAL_SINAL * 100) / 100
+    : valorSinal;
+  const valorPendenteFinal = resultadoDesconto
+    ? Math.max(0, valorTotalFinal - valorSinalFinal)
+    : valorPendente;
 
   const horariosOrdenados = [...(horariosSelecionados ?? [])].sort();
   const primeiroHorario = horariosOrdenados[0];
@@ -124,26 +163,166 @@ export function CarrinhoLateral({
 
             <Separator className="bg-slate-700/50" />
 
+            {/* Seleção de Voucher de Fidelidade */}
+            {vouchersDisponiveis.length > 0 && (
+              <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-2xl p-3.5 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Gift className="w-4 h-4 text-emerald-400" />
+                    <span className="text-xs font-bold text-white">
+                      Vouchers Fidelidade ({vouchersDisponiveis.length})
+                    </span>
+                  </div>
+                  {vouchersParaAplicar.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (onLimparVouchers) {
+                          onLimparVouchers();
+                        } else {
+                          onToggleVouchers?.(false);
+                          onSelecionarVoucher?.(null);
+                        }
+                      }}
+                      className="text-[10px] text-slate-400 hover:text-red-400 flex items-center gap-0.5 cursor-pointer"
+                    >
+                      <X className="w-3 h-3" /> Limpar ({vouchersParaAplicar.length})
+                    </button>
+                  )}
+                </div>
+
+                <p className="text-[11px] text-slate-300">
+                  {vouchersDisponiveis.length > 1
+                    ? "Selecione quais vouchers deseja aplicar nesta reserva:"
+                    : "Você possui 1 voucher de fidelidade disponível:"}
+                </p>
+
+                {/* Lista individual de vouchers */}
+                <div className="space-y-1.5 pt-0.5">
+                  {vouchersDisponiveis.map((v) => {
+                    const selecionado = vouchersParaAplicar.some((sel: VoucherFidelidade) => sel.id === v.id);
+                    return (
+                      <button
+                        key={v.id}
+                        type="button"
+                        onClick={() => {
+                          if (onToggleVoucher) {
+                            onToggleVoucher(v.id);
+                          } else {
+                            onToggleVouchers?.(!selecionado);
+                            onSelecionarVoucher?.(selecionado ? null : v);
+                          }
+                        }}
+                        className={cn(
+                          "w-full p-2.5 rounded-xl border text-left flex items-center justify-between transition-all cursor-pointer",
+                          selecionado
+                            ? "bg-emerald-500/20 border-emerald-500/60 text-white shadow-sm"
+                            : "bg-slate-900/70 border-slate-700/60 text-slate-300 hover:border-slate-600 hover:bg-slate-800/60"
+                        )}
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div
+                            className={cn(
+                              "w-4 h-4 rounded-md border flex items-center justify-center flex-shrink-0 transition-colors",
+                              selecionado
+                                ? "bg-emerald-500 border-emerald-400 text-slate-950"
+                                : "border-slate-600 bg-slate-800"
+                            )}
+                          >
+                            {selecionado && <Check className="w-3 h-3 stroke-[3]" />}
+                          </div>
+                          <div className="min-w-0">
+                            <span className="text-[11px] font-mono font-bold block truncate text-emerald-300">
+                              {v.codigo}
+                            </span>
+                            <span className="text-[10px] text-slate-400">
+                              Teto de até {formatarMoeda(v.valorTeto)}
+                            </span>
+                          </div>
+                        </div>
+
+                        <span
+                          className={cn(
+                            "text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0 ml-2",
+                            selecionado
+                              ? "bg-emerald-400 text-slate-950"
+                              : "bg-slate-800 text-slate-400 border border-slate-700"
+                          )}
+                        >
+                          {selecionado ? "Aplicado" : "Usar"}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {vouchersParaAplicar.length > 0 && (
+                  <div className="mt-1 p-2.5 bg-slate-900/90 rounded-xl border border-emerald-500/30 flex items-center justify-between text-xs">
+                    <div>
+                      <span className="text-slate-400 text-[11px] block">
+                        Desconto total ({vouchersParaAplicar.length}{" "}
+                        {vouchersParaAplicar.length === 1 ? "voucher" : "vouchers"}):
+                      </span>
+                      {resultadoDesconto?.reservaGratuita && (
+                        <span className="text-[10px] font-black uppercase text-emerald-400 block mt-0.5">
+                          🎉 100% Grátis com Fidelidade!
+                        </span>
+                      )}
+                    </div>
+                    <span className="font-bold text-emerald-400 font-mono text-sm">
+                      -{formatarMoeda(resultadoDesconto?.valorDesconto || 0)}
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Valores */}
             <div className="space-y-2">
               <div className="flex justify-between text-sm">
-                <span className="text-slate-400">Valor total</span>
-                <span className="text-white font-semibold">
+                <span className="text-slate-400">Valor original</span>
+                <span
+                  className={
+                    resultadoDesconto && resultadoDesconto.valorDesconto > 0
+                      ? "text-slate-500 line-through text-xs font-medium"
+                      : "text-white font-semibold"
+                  }
+                >
                   {formatarMoeda(valorTotal)}
                 </span>
               </div>
+
+              {resultadoDesconto && resultadoDesconto.valorDesconto > 0 && (
+                <div className="flex justify-between text-sm text-emerald-400 font-semibold">
+                  <span className="flex items-center gap-1 text-xs">
+                    <Ticket className="w-3.5 h-3.5" /> Desconto Fidelidade
+                  </span>
+                  <span>- {formatarMoeda(resultadoDesconto.valorDesconto)}</span>
+                </div>
+              )}
+
+              {resultadoDesconto && resultadoDesconto.valorDesconto > 0 && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-300 font-bold">Total com desconto</span>
+                  <span className="text-white font-black">
+                    {formatarMoeda(valorTotalFinal)}
+                  </span>
+                </div>
+              )}
+
               <div className="flex justify-between text-sm">
                 <span className="text-slate-400">
                   Sinal ({Math.round(PERCENTUAL_SINAL * 100)}%)
                 </span>
                 <span className="text-emerald-400 font-bold">
-                  {formatarMoeda(valorSinal)}
+                  {formatarMoeda(valorSinalFinal)}
                 </span>
               </div>
+
               <div className="flex justify-between text-sm">
                 <span className="text-slate-400">Restante no dia</span>
                 <span className="text-slate-300">
-                  {formatarMoeda(valorPendente)}
+                  {formatarMoeda(valorPendenteFinal)}
                 </span>
               </div>
             </div>

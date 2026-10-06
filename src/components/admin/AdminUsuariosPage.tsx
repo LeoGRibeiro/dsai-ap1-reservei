@@ -35,12 +35,15 @@ import {
   TrendingUp,
   X,
   CheckCircle2,
+  Ban,
+  CheckCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
   listarUsuariosCadastrados,
   atualizarPerfilSupabase,
   excluirContaSupabase,
+  toggleBloqueioUsuario,
 } from "@/lib/supabase/authService";
 import type { UserProfile } from "@/lib/supabase/types";
 import { useReservasService } from "@/hooks/useReservasService";
@@ -73,6 +76,9 @@ export function AdminUsuariosPage() {
   const [usuarioDetalhes, setUsuarioDetalhes] = useState<UserProfile | null>(null);
   const [usuarioEditar, setUsuarioEditar] = useState<UserProfile | null>(null);
   const [usuarioExcluir, setUsuarioExcluir] = useState<UserProfile | null>(null);
+  const [usuarioBloqueio, setUsuarioBloqueio] = useState<UserProfile | null>(null);
+  const [motivoBloqueio, setMotivoBloqueio] = useState("");
+  const [alterandoBloqueio, setAlterandoBloqueio] = useState(false);
 
   // Estados dos formulários de edição
   const [nomeEdit, setNomeEdit] = useState("");
@@ -200,6 +206,39 @@ export function AdminUsuariosPage() {
       toast.error("Falha ao salvar as alterações.");
     } finally {
       setSalvando(false);
+    }
+  };
+
+
+  const handleToggleBloqueio = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!usuarioBloqueio) return;
+    setAlterandoBloqueio(true);
+    try {
+      const novoStatus = !usuarioBloqueio.bloqueado;
+      const success = await toggleBloqueioUsuario(
+        usuarioBloqueio.id,
+        novoStatus,
+        motivoBloqueio,
+        {
+          nome: usuarioBloqueio.nome,
+          telefone: usuarioBloqueio.telefone,
+          dataNascimento: usuarioBloqueio.dataNascimento,
+        }
+      );
+      if (success) {
+        toast.success(novoStatus ? "Usuário bloqueado com sucesso." : "Usuário desbloqueado com sucesso.");
+        await carregarUsuarios();
+        setUsuarioBloqueio(null);
+        setUsuarioDetalhes(null);
+      } else {
+        toast.error("Falha ao alterar bloqueio.");
+      }
+    } catch (err) {
+      console.error("Erro ao alterar bloqueio:", err);
+      toast.error("Falha ao alterar bloqueio.");
+    } finally {
+      setAlterandoBloqueio(false);
     }
   };
 
@@ -408,9 +447,14 @@ export function AdminUsuariosPage() {
                               <span className="font-semibold text-white group-hover:text-emerald-300 transition-colors">
                                 {u.nome}
                               </span>
-                              <span className="inline-flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.2 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                                ⭐ Membro
-                              </span>
+                              {u.bloqueado && (
+                                <span
+                                  title={u.motivo_bloqueio ? `Motivo: ${u.motivo_bloqueio}` : "Usuário bloqueado para reservas"}
+                                  className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-red-500/15 text-red-400 border border-red-500/30"
+                                >
+                                  <Ban className="w-3 h-3" /> Bloqueado
+                                </span>
+                              )}
                               {aniversarioEsteMes && (
                                 <span
                                   title="Aniversariante deste mês!"
@@ -502,6 +546,26 @@ export function AdminUsuariosPage() {
                             <Edit2 className="w-3.5 h-3.5" />
                           </button>
 
+                          {/* Bloquear / Desbloquear */}
+                          <button
+                            onClick={() => {
+                              setMotivoBloqueio(u.motivo_bloqueio || "");
+                              setUsuarioBloqueio(u);
+                            }}
+                            title={u.bloqueado ? "Desbloquear usuário" : "Bloquear usuário"}
+                            className={`w-8 h-8 rounded-lg border flex items-center justify-center transition-colors ${
+                              u.bloqueado
+                                ? "bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border-amber-500/30"
+                                : "bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-amber-400 border-slate-700"
+                            }`}
+                          >
+                            {u.bloqueado ? (
+                              <CheckCircle className="w-3.5 h-3.5" />
+                            ) : (
+                              <Ban className="w-3.5 h-3.5" />
+                            )}
+                          </button>
+
                           {/* Excluir */}
                           <button
                             onClick={() => setUsuarioExcluir(u)}
@@ -536,9 +600,11 @@ export function AdminUsuariosPage() {
                 <div>
                   <DialogTitle className="text-xl font-black text-white flex items-center gap-2">
                     {usuarioDetalhes.nome}
-                    <span className="text-[11px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
-                      ⭐ Membro
-                    </span>
+                    {usuarioDetalhes.bloqueado && (
+                      <span className="text-[11px] font-bold text-red-400 bg-red-500/10 px-2 py-0.5 rounded-full border border-red-500/20 flex items-center gap-1">
+                        <Ban className="w-3 h-3" /> Bloqueado
+                      </span>
+                    )}
                   </DialogTitle>
                   <DialogDescription className="text-slate-400 text-xs mt-0.5">
                     ID: {usuarioDetalhes.id}
@@ -546,6 +612,23 @@ export function AdminUsuariosPage() {
                 </div>
               </div>
             </DialogHeader>
+
+            {/* Aviso de Bloqueio se aplicável */}
+            {usuarioDetalhes.bloqueado && (
+              <div className="bg-red-500/10 border border-red-500/25 rounded-xl p-3 text-xs text-red-300 space-y-1 my-3">
+                <div className="flex items-center gap-1.5 font-bold text-red-200">
+                  <Ban className="w-4 h-4 text-red-400" /> Usuário Bloqueado
+                </div>
+                <p className="text-slate-300 text-[11px]">
+                  Este usuário está impedido de realizar novas reservas no portal.
+                </p>
+                {usuarioDetalhes.motivo_bloqueio && (
+                  <p className="text-amber-200/90 font-mono text-[11px] bg-slate-950/60 p-2 rounded border border-amber-500/20 mt-1">
+                    <strong>Motivo informado:</strong> {usuarioDetalhes.motivo_bloqueio}
+                  </p>
+                )}
+              </div>
+            )}
 
             {/* Informações de Perfil e Contato */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-950/60 p-4 rounded-xl border border-slate-800 text-xs my-3">
@@ -565,10 +648,10 @@ export function AdminUsuariosPage() {
                 <p className="text-slate-200 font-medium text-sm mt-0.5">
                   {usuarioDetalhes.dataNascimento
                     ? formatarDataExibicao(usuarioDetalhes.dataNascimento, {
-                        day: "2-digit",
-                        month: "long",
-                        year: "numeric",
-                      })
+                      day: "2-digit",
+                      month: "long",
+                      year: "numeric",
+                    })
                     : "Não informada"}
                 </p>
               </div>
@@ -580,10 +663,10 @@ export function AdminUsuariosPage() {
                 <p className="text-slate-200 font-medium text-sm mt-0.5">
                   {usuarioDetalhes.criadoEm
                     ? formatarDataExibicao(usuarioDetalhes.criadoEm.split("T")[0], {
-                        day: "2-digit",
-                        month: "short",
-                        year: "numeric",
-                      })
+                      day: "2-digit",
+                      month: "short",
+                      year: "numeric",
+                    })
                     : "—"}
                 </p>
               </div>
@@ -651,16 +734,24 @@ export function AdminUsuariosPage() {
                                 Quadra {quadra?.numero ?? r.quadraId}
                               </span>
                               <span
-                                className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                                  r.status === "confirmada"
+                                className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${r.status === "confirmada"
                                     ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
                                     : r.status === "pendente"
                                       ? "bg-amber-500/10 text-amber-400 border-amber-500/30"
                                       : "bg-red-500/10 text-red-400 border-red-500/30"
-                                }`}
+                                  }`}
                               >
                                 {r.status}
                               </span>
+                              {r.reservaGratuitaFidelidade ? (
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-300 border border-purple-500/30">
+                                  🎁 100% Fidelidade
+                                </span>
+                              ) : r.descontoFidelidade && r.descontoFidelidade > 0 ? (
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-300 border border-purple-500/30">
+                                  🎁 -{formatarMoeda(r.descontoFidelidade)}
+                                </span>
+                              ) : null}
                             </div>
 
                             <p className="text-xs text-slate-400 flex items-center gap-2">
@@ -672,12 +763,14 @@ export function AdminUsuariosPage() {
                           <div className="flex items-center justify-between sm:justify-end gap-3 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-700/40">
                             <div className="text-left sm:text-right">
                               <p className="text-xs font-bold text-emerald-400">
-                                {formatarMoeda(r.valorTotal)}
+                                {r.reservaGratuitaFidelidade ? "R$ 0,00" : formatarMoeda(r.valorTotal)}
                               </p>
                               <p className="text-[10px] text-slate-500">
-                                {r.valorPendente === 0
-                                  ? "100% pago"
-                                  : `Resta ${formatarMoeda(r.valorPendente)}`}
+                                {r.reservaGratuitaFidelidade
+                                  ? "🎁 Voucher Fidelidade"
+                                  : r.valorPendente === 0
+                                    ? "100% pago"
+                                    : `Resta ${formatarMoeda(r.valorPendente)}`}
                               </p>
                             </div>
 
@@ -707,8 +800,33 @@ export function AdminUsuariosPage() {
                 Fechar
               </Button>
 
+
               <div className="flex items-center gap-2">
                 <Button
+                  onClick={() => {
+                    if (usuarioDetalhes) {
+                      setMotivoBloqueio(usuarioDetalhes.motivo_bloqueio || "");
+                      setUsuarioBloqueio(usuarioDetalhes);
+                      setUsuarioDetalhes(null);
+                    }
+                  }}
+                  variant="outline"
+                  className={`border-slate-700 hover:bg-slate-800 ${
+                    usuarioDetalhes?.bloqueado ? "text-emerald-400" : "text-amber-400"
+                  } gap-1.5`}
+                >
+                  {usuarioDetalhes?.bloqueado ? (
+                    <>
+                      <CheckCircle className="w-3.5 h-3.5" /> Desbloquear
+                    </>
+                  ) : (
+                    <>
+                      <Ban className="w-3.5 h-3.5" /> Bloquear
+                    </>
+                  )}
+                </Button>
+                <Button
+
                   onClick={() => {
                     handleAbrirEdicao(usuarioDetalhes);
                     setUsuarioDetalhes(null);
@@ -873,6 +991,103 @@ export function AdminUsuariosPage() {
                 )}
               </Button>
             </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* ── MODAL: Bloqueio / Desbloqueio de Usuário ── */}
+      {usuarioBloqueio && (
+        <Dialog
+          open={Boolean(usuarioBloqueio)}
+          onOpenChange={(v) => !v && setUsuarioBloqueio(null)}
+        >
+          <DialogContent className="bg-slate-900 border-slate-700 text-white max-w-md p-6">
+            <DialogHeader>
+              <div
+                className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-2 mx-auto ${
+                  usuarioBloqueio.bloqueado
+                    ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                    : "bg-red-500/10 text-red-400 border border-red-500/20"
+                }`}
+              >
+                {usuarioBloqueio.bloqueado ? (
+                  <CheckCircle className="w-6 h-6" />
+                ) : (
+                  <Ban className="w-6 h-6" />
+                )}
+              </div>
+              <DialogTitle className="text-lg font-black text-center text-white">
+                {usuarioBloqueio.bloqueado ? "Desbloquear Usuário?" : "Bloquear Usuário?"}
+              </DialogTitle>
+              <DialogDescription className="text-slate-300 text-center text-xs mt-1">
+                {usuarioBloqueio.bloqueado ? (
+                  <>
+                    Tem certeza de que deseja desbloquear{" "}
+                    <strong className="text-white">{usuarioBloqueio.nome}</strong>?
+                    Ele voltará a ter permissão para realizar novas reservas pelo portal.
+                  </>
+                ) : (
+                  <>
+                    Ao bloquear <strong className="text-white">{usuarioBloqueio.nome}</strong>,
+                    ele não poderá realizar novas reservas pelo portal e receberá um aviso ao tentar.
+                  </>
+                )}
+              </DialogDescription>
+            </DialogHeader>
+
+            <form onSubmit={handleToggleBloqueio} className="space-y-4 my-2">
+              {!usuarioBloqueio.bloqueado && (
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold text-slate-300">
+                    Motivo do Bloqueio (opcional)
+                  </Label>
+                  <Input
+                    value={motivoBloqueio}
+                    onChange={(e) => setMotivoBloqueio(e.target.value)}
+                    placeholder="Ex: Não comparecimento recorrente, pendência financeira..."
+                    className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500 h-10 text-sm"
+                  />
+                  <p className="text-[11px] text-slate-400">
+                    Este motivo fica registrado para a administração da quadra.
+                  </p>
+                </div>
+              )}
+
+              <DialogFooter className="pt-3 gap-2 sm:gap-0">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setUsuarioBloqueio(null)}
+                  disabled={alterandoBloqueio}
+                  className="border-slate-700 text-slate-300"
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={alterandoBloqueio}
+                  className={`font-bold gap-2 ${
+                    usuarioBloqueio.bloqueado
+                      ? "bg-emerald-500 hover:bg-emerald-400 text-slate-950"
+                      : "bg-red-600 hover:bg-red-500 text-white"
+                  }`}
+                >
+                  {alterandoBloqueio ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" /> Atualizando...
+                    </>
+                  ) : usuarioBloqueio.bloqueado ? (
+                    <>
+                      <CheckCircle className="w-4 h-4" /> Confirmar Desbloqueio
+                    </>
+                  ) : (
+                    <>
+                      <Ban className="w-4 h-4" /> Confirmar Bloqueio
+                    </>
+                  )}
+                </Button>
+              </DialogFooter>
+            </form>
           </DialogContent>
         </Dialog>
       )}

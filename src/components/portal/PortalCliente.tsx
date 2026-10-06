@@ -3,9 +3,7 @@
 import { useState, useCallback, useMemo } from "react";
 import { toast } from "sonner";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import Link from "next/link";
-import { User, Sparkles } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { User, Sparkles, Gift } from "lucide-react";
 
 import { CalendarioSelector } from "./CalendarioSelector";
 import { QuadraHorarioItem } from "./QuadraHorarioItem";
@@ -13,9 +11,24 @@ import { CarrinhoLateral, BotaoCarrinhoMobile } from "./CarrinhoLateral";
 import { FormularioIdentificacao, type DadosIdentificacao } from "./FormularioIdentificacao";
 import { ModalPix } from "./ModalPix";
 import { ModalPosReservaCadastro } from "./ModalPosReservaCadastro";
+import { MuralVagasAbertas } from "@/components/vagas/MuralVagasAbertas";
+import { LandingHeader } from "@/components/landing/LandingHeader";
+import { LandingFooter } from "@/components/landing/LandingFooter";
+import { LandingSecoesPlaceholder } from "@/components/landing/LandingSecoesPlaceholder";
+import { SecaoEstrutura } from "@/components/landing/SecaoEstrutura";
+import { SecaoEscolinhas } from "@/components/landing/SecaoEscolinhas";
+import { CabecalhoReserva, ID_TITULO_RESERVA } from "@/components/landing/CabecalhoReserva";
+import { BotaoVoltarAoTopo } from "@/components/landing/BotaoVoltarAoTopo";
+import { SmoothScrollProvider } from "@/components/landing/SmoothScrollProvider";
+import { SECAO_IDS } from "@/lib/landingPage/secoes";
 
 import { useReservasService } from "@/hooks/useReservasService";
+import { useContratosService } from "@/hooks/useContratosService";
 import { useUserAuth } from "@/hooks/useUserAuth";
+import { useFidelidadeService } from "@/hooks/useFidelidadeService";
+import type { VoucherFidelidade } from "@/lib/fidelidade/types";
+import { aplicarDescontoVouchers } from "@/lib/fidelidade/fidelidadeService";
+import { isTelefoneBloqueado } from "@/lib/supabase/authService";
 import {
   gerarDiasDisponiveis,
   getHoje,
@@ -42,9 +55,11 @@ export function PortalCliente() {
   const [dadosForm, setDadosForm] = useState<DadosIdentificacao | null>(null);
   const [tipoPagamentoEscolhido, setTipoPagamentoEscolhido] = useState<"sinal" | "integral">("sinal");
   const [isCarrinhoOpen, setIsCarrinhoOpen] = useState(false);
+  const [vouchersSelecionadosIds, setVouchersSelecionadosIds] = useState<string[]>([]);
 
-  // ── Autenticação de Usuário ─────────────────────────────────────────────
+  // ── Autenticação de Usuário & Fidelidade ──────────────────────────────────
   const { user, isAutenticado } = useUserAuth();
+  const { progresso, consumirVouchersNoCheckout } = useFidelidadeService();
   const [mostrarModalPosCadastro, setMostrarModalPosCadastro] = useState(false);
   const [dadosUltimaReserva, setDadosUltimaReserva] = useState<{
     id: string;
@@ -57,22 +72,54 @@ export function PortalCliente() {
     getHorariosOcupados,
     criarReservaEmProcessamento,
     atualizarIdentificacao,
+    atualizarDadosCheckout,
     confirmarPagamento,
     liberarLock,
   } = useReservasService();
+  const { getAvisosEscolinha } = useContratosService();
 
   // ── Valores calculados ──────────────────────────────────────────────────
-  const valorTotal = useMemo(
+  const valorTotalBruto = useMemo(
     () => calcularValorTotal(horariosSelecionados),
     [horariosSelecionados]
   );
-  const valorSinal = useMemo(() => calcularValorSinal(valorTotal), [valorTotal]);
+
+  const vouchersAtivosParaReserva = useMemo(() => {
+    return progresso.vouchersDisponiveis.filter((v) =>
+      vouchersSelecionadosIds.includes(v.id)
+    );
+  }, [vouchersSelecionadosIds, progresso.vouchersDisponiveis]);
+
+  const resultadoDesconto = useMemo(
+    () =>
+      vouchersAtivosParaReserva.length > 0
+        ? aplicarDescontoVouchers(valorTotalBruto, vouchersAtivosParaReserva)
+        : null,
+    [vouchersAtivosParaReserva, valorTotalBruto]
+  );
+
+  const valorTotal = resultadoDesconto ? resultadoDesconto.valorFinal : valorTotalBruto;
+  const valorSinal = useMemo(() => {
+    if (valorTotal === 0) return 0;
+    return calcularValorSinal(valorTotal);
+  }, [valorTotal]);
+
   const valorPendente = useMemo(
     () => calcularValorPendente(valorTotal),
     [valorTotal]
   );
 
   // ── Handlers ────────────────────────────────────────────────────────────
+
+  const handleToggleVoucher = useCallback((voucherId: string) => {
+    setVouchersSelecionadosIds((prev) =>
+      prev.includes(voucherId) ? prev.filter((id) => id !== voucherId) : [...prev, voucherId]
+    );
+  }, []);
+
+  const handleLimparVouchers = useCallback(() => {
+    setVouchersSelecionadosIds([]);
+  }, []);
 
   const handleSelectData = useCallback((data: string) => {
     setDataSelecionada(data);
@@ -87,6 +134,13 @@ export function PortalCliente() {
    */
   const handleToggleHorario = useCallback(
     (horario: string, quadraId: string) => {
+      if (user?.bloqueado) {
+        toast.error("Conta bloqueada para novas reservas", {
+          description: "Sua conta está com restrição para novos agendamentos. Por favor, entre em contato para entender o motivo.",
+        });
+        return;
+      }
+
       // Se clicar em quadra diferente, migra a seleção para a nova quadra
       if (quadraSelecionada !== null && quadraSelecionada !== quadraId) {
         setQuadraSelecionada(quadraId);
@@ -109,23 +163,33 @@ export function PortalCliente() {
         return next;
       });
     },
-    [quadraSelecionada]
+    [quadraSelecionada, user?.bloqueado]
   );
 
   const handleLimpar = useCallback(() => {
     setHorariosSelecionados([]);
     setQuadraSelecionada(null);
+    setVouchersSelecionadosIds([]);
   }, []);
 
-  const handleContinuar = useCallback(() => {
+  const handleContinuar = useCallback(async () => {
     if (!quadraSelecionada || horariosSelecionados.length === 0) return;
+
+    const tel = user?.telefone ? user.telefone.replace(/\D/g, "") : "";
+    const estaBloqueado = Boolean(user?.bloqueado) || (tel ? await isTelefoneBloqueado(tel) : false);
+
+    if (estaBloqueado) {
+      toast.error("Conta bloqueada para novas reservas", {
+        description: "Sua conta está com restrição para novos agendamentos. Por favor, entre em contato para entender o motivo.",
+      });
+      return;
+    }
 
     for (const h of horariosSelecionados) {
       if (isHorarioExpirado(dataSelecionada, h, 10)) {
         toast.error("Horário expirado", {
           description: "O horário escolhido já passou ou está muito próximo (menos de 10 min). Por favor, escolha outro.",
         });
-        // Remove os horários inválidos ou limpa tudo (aqui estamos só bloqueando)
         return;
       }
     }
@@ -144,10 +208,12 @@ export function PortalCliente() {
     horariosSelecionados,
     dataSelecionada,
     user?.id,
+    user?.bloqueado,
+    user?.telefone,
     criarReservaEmProcessamento,
   ]);
 
-  /** Formulário de dados e escolha de pagamento confirmados → abre modal Pix */
+  /** Formulário de dados e escolha de pagamento confirmados */
   const handleFormConfirmar = useCallback(
     (dados: DadosIdentificacao, tipoPagamento: "sinal" | "integral") => {
       if (!reservaIdAtual) return;
@@ -160,9 +226,82 @@ export function PortalCliente() {
         esporte: dados.esporte || undefined,
         observacoes: dados.observacoes || undefined,
       });
+
+      const descontoVal = resultadoDesconto ? resultadoDesconto.valorDesconto : 0;
+      const isGratis = valorTotal === 0 && vouchersAtivosParaReserva.length > 0;
+      const codigosVouchers = vouchersAtivosParaReserva.map((v) => v.codigo);
+
+      atualizarDadosCheckout(reservaIdAtual, {
+        valorTotal,
+        valorSinal: isGratis ? 0 : (tipoPagamento === "integral" ? valorTotal : valorSinal),
+        valorPendente: isGratis ? 0 : (tipoPagamento === "integral" ? 0 : valorPendente),
+        valorOriginal: valorTotalBruto,
+        descontoFidelidade: descontoVal,
+        vouchersUtilizados: codigosVouchers,
+        reservaGratuitaFidelidade: isGratis,
+        metodoPagamento: isGratis
+          ? "fidelidade"
+          : vouchersAtivosParaReserva.length > 0
+          ? "misto"
+          : "pix",
+      });
+
+      // Se a reserva for 100% coberta pelos vouchers de fidelidade (valorTotal === 0)
+      if (isGratis) {
+        confirmarPagamento(reservaIdAtual, "integral");
+
+        // Consome os vouchers selecionados utilizados nesta reserva
+        void consumirVouchersNoCheckout(
+          vouchersAtivosParaReserva.map((v) => v.id),
+          reservaIdAtual
+        );
+        setVouchersSelecionadosIds([]);
+
+        // Se visitante sem conta, salva dados para convidar a criar senha
+        if (!isAutenticado && dados) {
+          setDadosUltimaReserva({
+            id: reservaIdAtual,
+            nome: dados.nome,
+            whatsapp: dados.whatsapp,
+          });
+          setMostrarModalPosCadastro(true);
+        }
+
+        // Reseta estado local
+        setEtapa(null);
+        setReservaIdAtual(null);
+        setDadosForm(null);
+        setHorariosSelecionados([]);
+        setQuadraSelecionada(null);
+
+        const qtdVch = vouchersAtivosParaReserva.length;
+        toast.success("Reserva Gratuita Confirmada! 🎉", {
+          description: `Sua reserva foi 100% coberta com ${
+            qtdVch > 1
+              ? `seus ${qtdVch} vouchers de fidelidade`
+              : "seu voucher de fidelidade"
+          }! Bom jogo!`,
+          duration: 7000,
+        });
+        return;
+      }
+
       setEtapa("pix");
     },
-    [reservaIdAtual, atualizarIdentificacao]
+    [
+      reservaIdAtual,
+      atualizarIdentificacao,
+      atualizarDadosCheckout,
+      valorTotal,
+      valorTotalBruto,
+      valorSinal,
+      valorPendente,
+      resultadoDesconto,
+      vouchersAtivosParaReserva,
+      confirmarPagamento,
+      consumirVouchersNoCheckout,
+      isAutenticado,
+    ]
   );
 
   /**
@@ -184,6 +323,15 @@ export function PortalCliente() {
       }
 
       confirmarPagamento(reservaIdAtual, tipo);
+
+      // Consome os vouchers de fidelidade selecionados se foram aplicados nesta reserva
+      if (vouchersAtivosParaReserva.length > 0 && reservaIdAtual) {
+        void consumirVouchersNoCheckout(
+          vouchersAtivosParaReserva.map((v) => v.id),
+          reservaIdAtual
+        );
+        setVouchersSelecionadosIds([]);
+      }
 
       // Se visitante sem conta, salva dados para convidar a criar senha
       if (!isAutenticado && dadosForm) {
@@ -212,7 +360,16 @@ export function PortalCliente() {
         duration: 6000,
       });
     },
-    [reservaIdAtual, confirmarPagamento, isAutenticado, dadosForm, dataSelecionada, horariosSelecionados]
+    [
+      reservaIdAtual,
+      confirmarPagamento,
+      isAutenticado,
+      dadosForm,
+      dataSelecionada,
+      horariosSelecionados,
+      vouchersAtivosParaReserva,
+      consumirVouchersNoCheckout,
+    ]
   );
 
   /** Cancela checkout e libera o lock */
@@ -230,79 +387,62 @@ export function PortalCliente() {
       quadraId={quadraSelecionada}
       data={dataSelecionada}
       horariosSelecionados={horariosSelecionados}
-      valorTotal={valorTotal}
-      valorSinal={valorSinal}
-      valorPendente={valorPendente}
+      valorTotal={valorTotalBruto}
+      valorSinal={calcularValorSinal(valorTotalBruto)}
+      valorPendente={calcularValorPendente(valorTotalBruto)}
       onContinuar={handleContinuar}
       onLimpar={handleLimpar}
+      vouchersSelecionadosIds={vouchersSelecionadosIds}
+      onToggleVoucher={handleToggleVoucher}
+      onLimparVouchers={handleLimparVouchers}
+      vouchersDisponiveis={progresso.vouchersDisponiveis}
     />
   );
 
   return (
-    <>
+    <SmoothScrollProvider>
       <div className="min-h-screen bg-slate-950">
-        {/* ── Header ──────────────────────────────────────────────────── */}
-        <header className="sticky top-0 z-30 border-b border-slate-800 bg-slate-950/80 backdrop-blur-md">
-          <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="text-2xl">🏟️</span>
-              <div>
-                <span className="font-black text-white text-lg tracking-tight">
-                  Reservei
-                </span>
-                <span className="hidden sm:inline text-slate-500 text-sm ml-2">
-                  · Complexo Esportivo
-                </span>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              {user ? (
-                <Link href="/minha-conta">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="bg-slate-900 border-slate-700 hover:border-emerald-500/50 text-slate-200 hover:text-white rounded-full px-3.5 py-1 text-xs flex items-center gap-2"
-                  >
-                    <div className="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-[10px]">
-                      {user.nome.charAt(0).toUpperCase()}
-                    </div>
-                    <span className="font-semibold max-w-[100px] truncate sm:max-w-none">
-                      {user.nome.split(" ")[0]}
-                    </span>
-                    <span className="text-[10px] text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded-full hidden sm:inline">
-                      Minhas Reservas
-                    </span>
-                  </Button>
-                </Link>
-              ) : (
-                <div className="flex items-center gap-2">
-                  <Link href="/login">
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="text-slate-300 hover:text-white text-xs font-semibold px-3 py-1"
-                    >
-                      Entrar
-                    </Button>
-                  </Link>
-                  <Link href="/cadastro">
-                    <Button
-                      size="sm"
-                      className="bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold rounded-full text-xs px-3.5 py-1 shadow-md shadow-emerald-500/10"
-                    >
-                      Criar Conta
-                    </Button>
-                  </Link>
-                </div>
-              )}
-            </div>
-          </div>
-        </header>
+        {/* ── Header (navegação da Landing Page) ────────────────────────── */}
+        <LandingHeader />
 
-        {/* ── Layout Principal ─────────────────────────────────────────── */}
+        {/* ── Seção Início: fluxo de reserva SEMPRE em primeiro lugar ────── */}
+        <section
+          id={SECAO_IDS.INICIO}
+          aria-labelledby={ID_TITULO_RESERVA}
+          className="scroll-mt-20"
+        >
         <div className="max-w-7xl mx-auto px-4 py-6 md:grid md:grid-cols-[1fr_320px] lg:grid-cols-[1fr_360px] md:gap-6 lg:gap-8 md:items-start">
           {/* Coluna esquerda: seleção */}
-          <main className="space-y-6 pb-28 md:pb-6">
+          <main className="space-y-6 pb-10 md:pb-6">
+            {/* Título compacto da reserva (único h1 da página) */}
+            <CabecalhoReserva />
+            {/* Alerta de conta bloqueada */}
+            {user?.bloqueado && (
+              <div className="bg-red-950/40 border border-red-500/30 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 text-red-200 shadow-lg">
+                <div className="flex items-start gap-3.5">
+                  <div className="w-10 h-10 rounded-xl bg-red-500/10 border border-red-500/25 text-red-400 flex items-center justify-center flex-shrink-0 mt-0.5 text-lg">
+                    ⚠️
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-sm text-red-100">
+                      Conta Temporariamente Restrita para Reservas
+                    </h3>
+                    <p className="text-xs text-red-300/90 mt-1 leading-relaxed">
+                      Identificamos uma restrição em sua conta para agendamentos online. Para entender o motivo ou solicitar o desbloqueio, entre em contato com a administração.
+                    </p>
+                  </div>
+                </div>
+                <a
+                  href={`https://wa.me/5500000000000?text=${encodeURIComponent("Olá, gostaria de entender o motivo do bloqueio da minha conta no Reservei.")}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-red-500/20 hover:bg-red-500/30 text-red-200 border border-red-500/40 font-bold text-xs flex items-center justify-center gap-2 whitespace-nowrap transition-colors"
+                >
+                  Falar com Suporte
+                </a>
+              </div>
+            )}
+
             {/* Calendário horizontal */}
             <section>
               <CalendarioSelector
@@ -337,20 +477,42 @@ export function PortalCliente() {
                   dataSelecionada={dataSelecionada}
                   horariosSelecionados={isAtiva ? horariosSelecionados : []}
                   horariosOcupados={horariosOcupados}
+                  avisosEscolinha={getAvisosEscolinha(dataSelecionada, quadra.id)}
                   isAtiva={isAtiva}
                   onToggleHorario={handleToggleHorario}
                 />
               );
             })}
+
+            {/* Mural de Vagas Abertas (Versão Mobile) */}
+            <div className="md:hidden pt-4">
+              <MuralVagasAbertas />
+            </div>
           </main>
 
-          {/* Coluna direita: carrinho (desktop / tablet) */}
-          <aside className="hidden md:block sticky top-24">
+          {/* Coluna direita: carrinho (desktop / tablet) e Mural de Vagas */}
+          <aside className="hidden md:block sticky top-24 space-y-6">
             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 min-h-[400px] flex flex-col">
               {carrinhoContent}
             </div>
+
+            {/* Mural de Vagas Abertas posicionado abaixo do carrinho */}
+            <MuralVagasAbertas />
           </aside>
         </div>
+        </section>
+
+        {/* ── Seção: O Local e Estrutura (Galeria e Apresentação) ──────── */}
+        <SecaoEstrutura />
+
+        {/* ── Seção: Escolinhas e Aulas Esportivas ─────────────────────── */}
+        <SecaoEscolinhas />
+
+        {/* ── Seções institucionais futuras (placeholders das próximas specs) ── */}
+        <LandingSecoesPlaceholder />
+
+        {/* ── Rodapé ─────────────────────────────────────────────────── */}
+        <LandingFooter />
 
         {/* Botão flutuante carrinho (mobile) */}
         <BotaoCarrinhoMobile
@@ -358,6 +520,9 @@ export function PortalCliente() {
           valorSinal={valorSinal}
           onClick={() => setIsCarrinhoOpen(true)}
         />
+
+        {/* Botão flutuante para retorno suave ao topo */}
+        <BotaoVoltarAoTopo />
       </div>
 
       {/* Sheet mobile do carrinho */}
@@ -373,15 +538,20 @@ export function PortalCliente() {
         </SheetContent>
       </Sheet>
 
-      {/* Modal: Formulário de identificação, resumo e escolha de pagamento */}
+      {/* Modal: Formulário de identificação, resumo, fidelidade e escolha de pagamento */}
       <FormularioIdentificacao
         open={etapa === "formulario"}
         quadraId={quadraSelecionada}
         data={dataSelecionada}
         horariosSelecionados={horariosSelecionados}
+        valorTotalBruto={valorTotalBruto}
         valorTotal={valorTotal}
         valorSinal={valorSinal}
         valorPendente={valorPendente}
+        vouchersDisponiveis={progresso.vouchersDisponiveis}
+        vouchersSelecionadosIds={vouchersSelecionadosIds}
+        onToggleVoucher={handleToggleVoucher}
+        onLimparVouchers={handleLimparVouchers}
         onClose={handleCancelarCheckout}
         onConfirmar={handleFormConfirmar}
       />
@@ -409,6 +579,6 @@ export function PortalCliente() {
           onSucesso={() => setMostrarModalPosCadastro(false)}
         />
       )}
-    </>
+    </SmoothScrollProvider>
   );
 }

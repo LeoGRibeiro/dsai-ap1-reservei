@@ -14,6 +14,10 @@ import { AdminDashboardPage } from "./AdminDashboardPage";
 import { AdminAgendaPage } from "./AdminAgendaPage";
 import { AdminUsuariosPage } from "./AdminUsuariosPage";
 import { AdminFinanceiroPage } from "./AdminFinanceiroPage";
+import { AdminEscolinhasPage } from "./AdminEscolinhasPage";
+import { AdminGruposPage } from "./AdminGruposPage";
+import { AdminFidelidadePage } from "./AdminFidelidadePage";
+import { AdminInstitucionalPage } from "./AdminInstitucionalPage";
 
 // Placeholder pages para futuras specs
 function PlaceholderPage({ titulo }: { titulo: string }) {
@@ -79,6 +83,10 @@ export function AdminShell({ initialView = "dashboard" }: Props) {
           {view === "agenda" && <AdminAgendaPage />}
           {view === "usuarios" && <AdminUsuariosPage />}
           {view === "financeiro" && <AdminFinanceiroPage />}
+          {view === "institucional" && <AdminInstitucionalPage />}
+          {view === "escolinhas" && <AdminEscolinhasPage />}
+          {view === "grupos" && <AdminGruposPage />}
+          {view === "fidelidade" && <AdminFidelidadePage />}
         </div>
       </main>
     </div>
