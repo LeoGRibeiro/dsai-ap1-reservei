@@ -16,7 +16,12 @@ import {
   calcularValorSinal,
   calcularValorPendente,
   calcularValorTotal,
+  calcularValorHora,
 } from "@/lib/constants";
+
+import {
+  calcularValoresDinamicos,
+} from "@/lib/dynamicPricing";
 import type { Esporte } from "@/lib/quadras";
 import {
   fetchReservasSupabase,
@@ -228,7 +233,6 @@ export function useReservasService() {
   }, [reservas]);
 
   // ── Mutations Assíncronas (Sync com Supabase) ───────────────────────────────
-
   /**
    * Cria uma reserva com status "em_processamento" (lock temporário).
    * Grava diretamente no Supabase e atualiza o estado local imediatamente.
@@ -236,11 +240,23 @@ export function useReservasService() {
   const criarReservaEmProcessamento = useCallback(
     (dados: DadosCriacaoReserva): string => {
       const horarios = [...dados.horarios].sort();
-      const valorTotal = calcularValorTotal(horarios);
+
+      const valoresDinamicos = calcularValoresDinamicos(
+        dados.data,
+        dados.quadraId,
+        horarios,
+        calcularValorHora,
+        reservas
+      );
+
+      const valorOriginal = valoresDinamicos.valorOriginal;
+      const valorTotal = valoresDinamicos.valorFinal;
+
       const id = `rsv_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
 
       // Se userId não foi passado explicitamente mas o cliente tem conta cadastrada com esse telefone
       let finalUserId = dados.userId;
+
       if (!finalUserId && dados.whatsappCliente) {
         const digits = dados.whatsappCliente.replace(/\D/g, "");
         finalUserId = getTelefonesCadastradosLocal().get(digits);
@@ -253,13 +269,20 @@ export function useReservasService() {
         data: dados.data,
         horarios,
         horaInicio: horarios[0],
-        horaFim: `${String(parseInt(horarios[horarios.length - 1], 10) + 1).padStart(2, "0")}:00`,
+        horaFim: `${String(
+          parseInt(horarios[horarios.length - 1], 10) + 1
+        ).padStart(2, "0")}:00`,
         nomeCliente: dados.nomeCliente ?? "",
         whatsappCliente: dados.whatsappCliente ?? "",
         cpfCliente: dados.cpfCliente ?? "",
+
+        // Preço dinâmico
+        valorOriginal,
         valorTotal,
+
         valorSinal: calcularValorSinal(valorTotal),
         valorPendente: calcularValorPendente(valorTotal),
+
         status: "em_processamento",
         statusWhatsApp: "nao_enviado",
         criadaEm: new Date().toISOString(),
@@ -275,9 +298,8 @@ export function useReservasService() {
 
       return id;
     },
-    [adicionarReserva]
+    [adicionarReserva, reservas]
   );
-
   /**
    * Atualiza os dados de identificação de uma reserva em processamento no Supabase.
    */
