@@ -137,21 +137,6 @@ export function AdminLogin({ onLogin }: Props) {
           Reservei · Painel Administrativo
         </p>
       </div>
-
-      <style jsx>{`
-        @keyframes shake {
-          0%, 100% { transform: translateX(0); }
-          15% { transform: translateX(-6px); }
-          30% { transform: translateX(6px); }
-          45% { transform: translateX(-4px); }
-          60% { transform: translateX(4px); }
-          75% { transform: translateX(-2px); }
-          90% { transform: translateX(2px); }
-        }
-        .animate-shake {
-          animation: shake 0.45s ease-in-out;
-        }
-      `}</style>
     </div>
   );
 }

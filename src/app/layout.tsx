@@ -20,8 +20,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="pt-BR" className={inter.variable}>
-      <body className="font-sans antialiased bg-slate-950 text-white">
+    <html lang="pt-BR" className={inter.variable} suppressHydrationWarning>
+      <body className="font-sans antialiased bg-slate-950 text-white" suppressHydrationWarning>
         {children}
         <Toaster
           position="bottom-center"

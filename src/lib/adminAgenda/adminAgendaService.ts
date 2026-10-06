@@ -493,3 +493,96 @@ export function getNomeMesExtenso(mes: number): string {
   ];
   return nomes[mes - 1] ?? "";
 }
+
+/**
+ * Converte uma string de horário "HH:MM" para o número total de minutos desde a meia-noite (0..1440).
+ *
+ * @param horario Horário no formato "HH:MM" (ex.: "16:00", "17:30")
+ * @returns Quantidade total de minutos transcorridos no dia
+ * @example
+ * ```ts
+ * horarioParaMinutos("16:00"); // 960
+ * horarioParaMinutos("17:18"); // 1038
+ * ```
+ */
+export function horarioParaMinutos(horario: string): number {
+  if (!horario || typeof horario !== "string") return 0;
+  const [h, m] = horario.split(":").map(Number);
+  return (h || 0) * 60 + (m || 0);
+}
+
+/**
+ * Retorna a data local atual no formato padrão ISO "YYYY-MM-DD".
+ *
+ * @returns Data formatada "YYYY-MM-DD"
+ */
+export function obterDataHojeLocal(): string {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${dd}`;
+}
+
+/**
+ * Formata um valor de minutos restantes em uma string amigável "MM:SS" para exibição em cronômetros.
+ *
+ * @param minutosRestantes Quantidade de minutos restantes (pode conter frações de minuto)
+ * @returns Texto formatado "MM:SS" (ex: "45:30", "02:15")
+ */
+export function formatarTempoRestante(minutosRestantes: number): string {
+  const m = Math.max(0, Math.floor(minutosRestantes));
+  const s = Math.max(0, Math.round((minutosRestantes - Math.floor(minutosRestantes)) * 60));
+  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
+
+/**
+ * Retorna o progresso normalizado [0..1] de uma reserva atualmente em andamento.
+ * Retorna estritamente `null` se a reserva não estiver acontecendo exatamente agora.
+ *
+ * Regra de Ouro da Timeline:
+ * 1. Apenas exibe progresso ativo se a data visualizada for EXATAMENTE a data de hoje
+ *    e a reserva também pertencer ao dia de hoje (`dataExibida === hoje && reserva.data === hoje`).
+ *    Para datas futuras ou passadas, o retorno é obrigatoriamente `null`.
+ * 2. O horário atual (`minutosAgora`) deve estar dentro do intervalo [inicio, fim).
+ *
+ * @param reserva Objeto da reserva a ser analisada
+ * @param dataExibida Data selecionada na visualização da agenda (YYYY-MM-DD)
+ * @param minutosAgora Minutos atuais transcorridos no dia (ex: 17:18 = 1038)
+ * @param hojeStr Data de hoje opcional (para injeção e testes determinísticos)
+ * @returns Valor entre 0 e 1 indicando o percentual decorrido, ou null caso não esteja ativa
+ * @example
+ * ```ts
+ * // Hoje é 2026-10-06, 17:18 (1038 min). Reserva no domingo 2026-10-11 das 16:00 às 20:00:
+ * calcularProgressoAtivo(reservaDomingo, "2026-10-11", 1038, "2026-10-06"); // null (não ativo!)
+ *
+ * // Hoje é 2026-10-06, 17:00 (1020 min). Reserva hoje das 16:00 às 18:00:
+ * calcularProgressoAtivo(reservaHoje, "2026-10-06", 1020, "2026-10-06"); // 0.5 (50% concluído)
+ * ```
+ */
+export function calcularProgressoAtivo(
+  reserva: Reserva,
+  dataExibida: string,
+  minutosAgora: number,
+  hojeStr?: string
+): number | null {
+  const hoje = hojeStr ?? obterDataHojeLocal();
+
+  // Se a data exibida não for hoje, ou se a reserva não for de hoje, nunca está em andamento agora
+  if (dataExibida !== hoje || reserva.data !== hoje) {
+    return null;
+  }
+
+  const inicio = horarioParaMinutos(reserva.horaInicio);
+  const fim = horarioParaMinutos(reserva.horaFim);
+
+  if (fim <= inicio) {
+    return null;
+  }
+
+  if (minutosAgora < inicio || minutosAgora >= fim) {
+    return null;
+  }
+
+  return (minutosAgora - inicio) / (fim - inicio);
+}
