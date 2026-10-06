@@ -2,7 +2,7 @@
 
 **Dupla:** Leonardo G. Ribeiro e Lucas Reis  
 **Disciplina:** Desenvolvimento de Software Apoiado por IA (DSAI) — 2026.4 | Prof. Gustavo Pinto (UFPA)  
-**URL de Produção:** [https://dsai-ap1-reservei-lmrotsyzj-leo-gr-ibeiro.vercel.app](https://dsai-ap1-reservei-lmrotsyzj-leo-gr-ibeiro.vercel.app)  
+**URL de Produção:** [https://dsai-ap1-reservei-jykz9j1rz-leo-gr-ibeiro.vercel.app](https://dsai-ap1-reservei-jykz9j1rz-leo-gr-ibeiro.vercel.app)  
 
 ---
 
