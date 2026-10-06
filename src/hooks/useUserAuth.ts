@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useEffect, useCallback } from "react";
 import type { UserProfile } from "@/lib/supabase/types";
 import {
   cadastrarUsuarioSupabase,
@@ -11,14 +11,34 @@ import {
   excluirContaSupabase,
 } from "@/lib/supabase/authService";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase/client";
+import { useAuthStore, getUsuarioCacheLocal } from "@/store/useAuthStore";
 
+/**
+ * Hook de autenticação do usuário.
+ *
+ * Conectado à store global Zustand (`useAuthStore`) com hidratação síncrona
+ * de cache local (`localStorage`), garantindo que:
+ * 1. A sessão nunca se perca durante navegações de rota (ex.: ir para /minha-conta e voltar para /).
+ * 2. Não ocorra flickering de botões de login/cadastro enquanto a sessão é revalidada em segundo plano.
+ * 3. Qualquer alteração de perfil reflita simultaneamente em todos os componentes.
+ */
 export function useUserAuth() {
-  const [user, setUser] = useState<UserProfile | null>(null);
-  const [loading, setLoading] = useState(true);
+  const user = useAuthStore((s) => s.user);
+  const loading = useAuthStore((s) => s.loading);
+  const setUser = useAuthStore((s) => s.setUser);
+  const setLoading = useAuthStore((s) => s.setLoading);
 
-  // Carrega usuário atual na inicialização
+  // Carrega e sincroniza usuário na inicialização
   useEffect(() => {
     let isMounted = true;
+
+    // Hidratação síncrona do cache se a store ainda estiver nula
+    if (!user && typeof window !== "undefined") {
+      const cached = getUsuarioCacheLocal();
+      if (cached && isMounted) {
+        setUser(cached);
+      }
+    }
 
     async function carregarSessao() {
       try {
@@ -78,7 +98,7 @@ export function useUserAuth() {
         authSub.unsubscribe();
       }
     };
-  }, []);
+  }, [setUser, setLoading, user]);
 
   const login = useCallback(
     async (telefone: string, senha: string): Promise<{ success: boolean; error?: string }> => {
@@ -91,7 +111,7 @@ export function useUserAuth() {
       }
       return { success: false, error: res.error || "Erro ao realizar login." };
     },
-    []
+    [setUser, setLoading]
   );
 
   const cadastrar = useCallback(
@@ -110,7 +130,7 @@ export function useUserAuth() {
       }
       return { success: false, error: res.error || "Erro ao cadastrar usuário." };
     },
-    []
+    [setUser, setLoading]
   );
 
   const logout = useCallback(async () => {
@@ -118,7 +138,7 @@ export function useUserAuth() {
     await logoutUsuarioSupabase();
     setUser(null);
     setLoading(false);
-  }, []);
+  }, [setUser, setLoading]);
 
   const atualizarPerfil = useCallback(
     async (dados: Partial<Omit<UserProfile, "id" | "criadoEm">>): Promise<boolean> => {
@@ -130,7 +150,7 @@ export function useUserAuth() {
       }
       return false;
     },
-    [user]
+    [user, setUser]
   );
 
   const excluirConta = useCallback(async (): Promise<boolean> => {
@@ -141,7 +161,7 @@ export function useUserAuth() {
       return true;
     }
     return false;
-  }, [user]);
+  }, [user, setUser]);
 
   return {
     user,

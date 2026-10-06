@@ -28,9 +28,14 @@ Transformação da tela inicial do Portal do Cliente em uma Landing Page "Single
 - Assinatura da plataforma (Reservei).
 - Links para redes sociais.
 
-## 3. Metas de Design
+## 3. Metas de Design e Refinamento de Rolagem
 - Design *premium*, uso de cores da marca, fontes modernas (ex: Inter ou Roboto).
 - Responsividade total (Mobile-first).
+- **Rolagem Refinada (Smooth Scroll):**
+  - Animação com curva suave customizada (`easeInOutCubic`) via `requestAnimationFrame` para transição orgânica e confortável entre as seções.
+  - Velocidade proporcional à distância a ser percorrida (`calcularDuracaoRolagem`).
+  - Interrupção graciosa caso o usuário intervenha durante a rolagem (roda do mouse ou toque).
+  - Botão flutuante "Voltar ao Topo" (`BotaoVoltarAoTopo`) com transição suave e acesso rápido ao fluxo de reserva.
 
 ## 4. Banco de Dados / Migrações
 - Não há migrações de banco de dados estritamente necessárias para a base estrutural.

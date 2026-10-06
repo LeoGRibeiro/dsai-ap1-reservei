@@ -1,0 +1,198 @@
+/**
+ * @module landingPage/secoes
+ *
+ * Catálogo central (fonte única da verdade) das seções da Landing Page.
+ *
+ * A ORDEM deste array define a ordem de renderização na página e a ordem dos
+ * links de navegação. A seção `inicio` (fluxo de reserva) deve permanecer
+ * sempre na primeira posição — Regra de Ouro da spec de navegação.
+ *
+ * @see SPEC/2026-10-06-lp-base-navegacao.md
+ */
+
+import type { PlaceholderSecao, SecaoLandingId, SecaoLandingPage } from "./types";
+
+/** Caminhos das specs responsáveis por cada grupo de seções. */
+export const SPECS_LANDING_PAGE = {
+  BASE_NAVEGACAO: "SPEC/2026-10-06-lp-base-navegacao.md",
+  CONTEUDO_INSTITUCIONAL: "SPEC/2026-10-06-lp-conteudo-institucional.md",
+  PROVA_SOCIAL_REDES: "SPEC/2026-10-06-lp-prova-social-redes.md",
+  EVENTOS_FIDELIDADE: "SPEC/2026-10-06-lp-eventos-fidelidade.md",
+  SUPORTE_CONTATO: "SPEC/2026-10-06-lp-suporte-contato.md",
+} as const;
+
+/**
+ * Constantes nomeadas para os IDs das seções — evita "strings mágicas"
+ * espalhadas pelos componentes.
+ *
+ * @example
+ * <section id={SECAO_IDS.INICIO}>...</section>
+ */
+export const SECAO_IDS = {
+  INICIO: "inicio",
+  ESTRUTURA: "estrutura",
+  ESCOLINHAS: "escolinhas",
+  FIDELIDADE: "fidelidade",
+  EVENTOS: "eventos",
+  AVALIACOES: "avaliacoes",
+  INSTAGRAM: "instagram",
+  FAQ: "faq",
+  CONTATO: "contato",
+} as const satisfies Record<string, SecaoLandingId>;
+
+/**
+ * Lista ordenada de todas as seções da Landing Page.
+ *
+ * Links do menu principal (conforme spec): Início, Estrutura, Escolinhas,
+ * Eventos e Contato. As demais seções existem na página mas não ocupam espaço
+ * no cabeçalho — basta alterar `exibirNoMenu` para promovê-las.
+ */
+export const SECOES_LANDING_PAGE: readonly SecaoLandingPage[] = [
+  {
+    id: SECAO_IDS.INICIO,
+    rotuloMenu: "Início",
+    titulo: "Agende sua quadra agora",
+    subtitulo: "Escolha o dia, toque nos horários livres e garanta seu jogo em poucos segundos.",
+    exibirNoMenu: true,
+    specReferencia: SPECS_LANDING_PAGE.BASE_NAVEGACAO,
+  },
+  {
+    id: SECAO_IDS.ESTRUTURA,
+    rotuloMenu: "Estrutura",
+    titulo: "O Local e Estrutura",
+    subtitulo: "Conheça nossas quadras, vestiários, bar e área de lazer.",
+    exibirNoMenu: true,
+    specReferencia: SPECS_LANDING_PAGE.CONTEUDO_INSTITUCIONAL,
+  },
+  {
+    id: SECAO_IDS.ESCOLINHAS,
+    rotuloMenu: "Escolinhas",
+    titulo: "Escolinhas e Aulas",
+    subtitulo: "Modalidades, professores e horários para todas as idades.",
+    exibirNoMenu: true,
+    specReferencia: SPECS_LANDING_PAGE.CONTEUDO_INSTITUCIONAL,
+  },
+  {
+    id: SECAO_IDS.FIDELIDADE,
+    rotuloMenu: "Fidelidade",
+    titulo: "Programa de Fidelidade",
+    subtitulo: "Jogue, acumule pontos e troque por reservas grátis e descontos.",
+    exibirNoMenu: false,
+    specReferencia: SPECS_LANDING_PAGE.EVENTOS_FIDELIDADE,
+  },
+  {
+    id: SECAO_IDS.EVENTOS,
+    rotuloMenu: "Eventos",
+    titulo: "Campeonatos e Eventos",
+    subtitulo: "Torneios, ligas e eventos sociais que movimentam o complexo.",
+    exibirNoMenu: true,
+    specReferencia: SPECS_LANDING_PAGE.EVENTOS_FIDELIDADE,
+  },
+  {
+    id: SECAO_IDS.AVALIACOES,
+    rotuloMenu: "Avaliações",
+    titulo: "O que dizem nossos clientes",
+    subtitulo: "Avaliações reais publicadas no Google.",
+    exibirNoMenu: false,
+    specReferencia: SPECS_LANDING_PAGE.PROVA_SOCIAL_REDES,
+  },
+  {
+    id: SECAO_IDS.INSTAGRAM,
+    rotuloMenu: "Instagram",
+    titulo: "Siga a gente no Instagram",
+    subtitulo: "Os posts e reels mais recentes do complexo.",
+    exibirNoMenu: false,
+    specReferencia: SPECS_LANDING_PAGE.PROVA_SOCIAL_REDES,
+  },
+  {
+    id: SECAO_IDS.FAQ,
+    rotuloMenu: "Dúvidas",
+    titulo: "Termos, Regras e Perguntas Frequentes",
+    subtitulo: "Política de chuva, cancelamento e regras de uso das quadras.",
+    exibirNoMenu: false,
+    specReferencia: SPECS_LANDING_PAGE.SUPORTE_CONTATO,
+  },
+  {
+    id: SECAO_IDS.CONTATO,
+    rotuloMenu: "Contato",
+    titulo: "Localização e Contato",
+    subtitulo: "Como chegar, horários de funcionamento e canais de atendimento.",
+    exibirNoMenu: true,
+    specReferencia: SPECS_LANDING_PAGE.SUPORTE_CONTATO,
+  },
+];
+
+/**
+ * Funcionalidades previstas para cada seção ainda não implementada.
+ * Exibidas nos placeholders para dar noção do layout final.
+ *
+ * Remova a entrada correspondente quando a seção real for implementada.
+ */
+export const PLACEHOLDERS_SECOES: readonly PlaceholderSecao[] = [
+  {
+    secaoId: SECAO_IDS.ESTRUTURA,
+    itensPlanejados: [
+      "Galeria/carrossel de fotos das quadras, bar, vestiários e lazer",
+      "Descrições editáveis pelo Painel Admin",
+      "Upload de imagens via Supabase Storage",
+    ],
+  },
+  {
+    secaoId: SECAO_IDS.ESCOLINHAS,
+    itensPlanejados: [
+      "Cards por modalidade (Tênis, Beach Tennis, Futebol...)",
+      "Perfil e foto do professor responsável",
+      "Faixas etárias e horários",
+      "Botão \"Tenho Interesse\" com mensagem pronta no WhatsApp",
+    ],
+  },
+  {
+    secaoId: SECAO_IDS.FIDELIDADE,
+    itensPlanejados: [
+      "Passo a passo de \"Como Funciona\" o acúmulo de pontos",
+      "Exemplos de recompensas reais disponíveis",
+      "CTA \"Crie sua Conta e Comece a Pontuar\"",
+    ],
+  },
+  {
+    secaoId: SECAO_IDS.EVENTOS,
+    itensPlanejados: [
+      "Cards de torneios, ligas e eventos sociais",
+      "Data, horário, valor de inscrição e regras",
+      "Cadastro de eventos e banners pelo Painel Admin",
+    ],
+  },
+  {
+    secaoId: SECAO_IDS.AVALIACOES,
+    itensPlanejados: [
+      "Nota geral do Google com estrelas",
+      "Carrossel com os depoimentos mais recentes",
+      "Botão \"Avalie-nos no Google\"",
+    ],
+  },
+  {
+    secaoId: SECAO_IDS.INSTAGRAM,
+    itensPlanejados: [
+      "Grid com os posts e reels mais recentes",
+      "Clique leva à postagem original",
+      "Botão \"Siga nosso Instagram\"",
+    ],
+  },
+  {
+    secaoId: SECAO_IDS.FAQ,
+    itensPlanejados: [
+      "Perguntas em formato sanfona (accordion)",
+      "Política de chuva e de cancelamento",
+      "Regras de vestimenta e calçados",
+      "Gestão das perguntas pelo Painel Admin",
+    ],
+  },
+  {
+    secaoId: SECAO_IDS.CONTATO,
+    itensPlanejados: [
+      "Mapa interativo do Google Maps",
+      "Horários de funcionamento sincronizados com o sistema",
+      "Atalhos para WhatsApp, telefone e e-mail",
+    ],
+  },
+];
