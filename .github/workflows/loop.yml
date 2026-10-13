@@ -33,9 +33,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
+        
 
-      - run: npm ci
+      - run: npm install
       - run: npm install -g @anthropic-ai/claude-code
 
       - name: Preparar branch e rótulo
@@ -62,6 +62,8 @@ jobs:
       - name: Rede de segurança (nem branch nem escalação)
         if: always()
         run: |
+          gh label create precisa-humano --color D93F0B \
+            --description "O loop parou e precisa de uma pessoa" 2>/dev/null || true
           labels=$(gh issue view "$ISSUE_NUMBER" --json labels -q '.labels[].name')
           if git ls-remote --exit-code --heads origin "loop/issue-${ISSUE_NUMBER}" >/dev/null 2>&1; then pushed=1; else pushed=0; fi
           if ! echo "$labels" | grep -qx 'precisa-humano' && [ "$pushed" = "0" ]; then
