@@ -28,3 +28,6 @@ BACKLOG.md
 mcp_server/.venv/
 __pycache__/
 *.pyc
+*.egg-info/
+dist/
+build/

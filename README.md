@@ -105,6 +105,35 @@ reservei/
     └── store/             # Stores Zustand (autenticação, reservas, contratos)
 ```
 
+## 🤖 Integração com Assistentes de IA: Servidor MCP (Model Context Protocol)
+
+O Reservei disponibiliza um **Servidor MCP Oficial** ([`mcp_server/`](./mcp_server/)) desenvolvido em Python com [FastMCP](https://github.com/jlowin/fastmcp), permitindo que agentes e assistentes de Inteligência Artificial (**Claude Desktop**, **Claude Code**, **Antigravity**, **Cursor**, etc.) consultem e operem o complexo esportivo diretamente via ferramentas (*tools*).
+
+### Ferramentas Expostas ao Agente:
+1. `consultar_disponibilidade`: Grade em tempo real de horários livres e ocupados por data (`AAAA-MM-DD`).
+2. `buscar_reservas_cliente`: Localização do histórico de reservas por número de telefone/WhatsApp.
+3. `criar_reserva`: Agendamento seguro com bloqueio imediato e prevenção contra *double booking* (requer autorização humana `ask`).
+
+### Como Usar em Qualquer Assistente (Zero-Config via `uvx`):
+No arquivo de configuração do seu assistente de IA (ex.: Claude Desktop ou `.cursor/mcp.json`):
+
+```json
+{
+  "mcpServers": {
+    "reservei": {
+      "command": "uvx",
+      "args": [
+        "--from",
+        "git+https://github.com/LeoGRibeiro/dsai-ap1-reservei.git#subdirectory=mcp_server",
+        "reservei-mcp"
+      ]
+    }
+  }
+}
+```
+
+> 📖 **Guia Completo do MCP:** Consulte a documentação dedicada em [`mcp_server/README.md`](./mcp_server/README.md).
+
 ---
 
 ## 🤖 Ferramentas e Modelos de IA Utilizados

@@ -12,44 +12,12 @@ Se o arquivo `BACKLOG.md` não existir, crie-o.
 
 ---
 
-# Spec-Driven Development (SDD) e Commits
+# Spec-Driven Development (SDD) e Versionamento
 
-A partir de agora, você deve incorporar uma nova habilidade (skill) obrigatória no nosso fluxo de trabalho, baseada nas regras de Spec-Driven Development (SDD).
+O desenvolvimento segue a metodologia baseada em especificações (`SPEC/`), mantendo a arquitetura documentada antes de grandes implementações.
 
-Toda vez que você finalizar uma resposta que envolva criação de arquivos ou código, você deve sempre encerrar a sua resposta fornecendo um bloco de código de terminal com o comando exato do git commit pronto para eu copiar e colar.
-
-Para gerar o comando correto, você deve analisar o que acabou de fazer e aplicar uma destas duas regras condicionais:
-
-## Cenário A: Geração ou Edição de Spec
-Se a sua resposta gerou ou alterou um arquivo Markdown dentro da pasta `SPEC/`:
-
-- O comando deve adicionar apenas a spec: `git add SPEC/<nome-do-arquivo>.md`
-- A mensagem deve ser: `docs: cria especificacao para <tema>` (ou `atualiza`).
-- O trailer `Agent:` deve ser preenchido como `gemini-pro`.
-- O trailer `Spec:` deve apontar para o próprio arquivo recém-criado/editado.
-
-## Cenário B: Implementação de Código
-Se a sua resposta gerou ou alterou código-fonte (ex: pasta `src/` ou outras partes de código):
-
-- O comando deve adicionar os arquivos modificados (ex: `git add src/`).
-- A mensagem deve usar Conventional Commits reais baseados no que foi feito (`feat: ...`, `fix: ...`, `refactor: ...`).
-- O trailer `Agent:` deve ser preenchido como `claude-3.5-sonnet`.
-- O trailer `Spec:` deve apontar para o arquivo da spec que estamos implementando no momento (se não tiver certeza de qual é a spec ativa, coloque `Spec: SPEC/<INSERIR-SPEC-AQUI>.md`).
-
-## Formatação Obrigatória
-
-Sempre pule duas linhas em branco entre a descrição do commit e os trailers.
-
-Exemplo do formato de saída:
-
-```bash
-git add src/
-git commit -m "feat: cria componentes do carrinho e validacao de horario
-
-
-Agent: claude-3.5-sonnet
-Spec: SPEC/2026-09-30-portal-cliente.md"
-```
+**Commits:**
+Não é necessário gerar blocos de código de terminal com comandos automáticos de `git commit` ao final de cada resposta. Forneça instruções ou comandos de commit apenas quando explicitamente solicitado pelo usuário ou em marcos consolidados de entrega.
 
 ---
 

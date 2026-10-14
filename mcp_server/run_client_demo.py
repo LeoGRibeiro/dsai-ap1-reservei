@@ -6,14 +6,34 @@ sem depender de configurações externas.
 """
 
 import sys
-from server import consultar_disponibilidade, buscar_reservas_cliente, criar_reserva
+from pathlib import Path
 
+# Garante saída UTF-8 no console/stdio
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
 
+# Adiciona o diretório atual ao sys.path para importação de reservei_mcp
+_CURRENT_DIR = Path(__file__).resolve().parent
+if str(_CURRENT_DIR) not in sys.path:
+    sys.path.insert(0, str(_CURRENT_DIR))
+
+try:
+    from reservei_mcp.server import (
+        consultar_disponibilidade,
+        buscar_reservas_cliente,
+        criar_reserva,
+    )
+except ImportError:
+    from server import (
+        consultar_disponibilidade,
+        buscar_reservas_cliente,
+        criar_reserva,
+    )
+
+
 def main():
     print("=" * 70)
-    print("🏟️ DEMO PRÁTICA: SERVIDOR MCP RESERVEI (AULA 06)")
+    print("🏟️ DEMO PRÁTICA: SERVIDOR MCP RESERVEI")
     print("=" * 70)
 
     # 1. Consulta de disponibilidade
@@ -33,7 +53,7 @@ def main():
         horario="14:00",
         nome_cliente="Carlos Eduardo",
         whatsapp_cliente="91988887777",
-        esporte="Futsal"
+        esporte="Futsal",
     )
     print(resultado_erro)
 
@@ -49,7 +69,7 @@ def main():
         horario=horario_livre,
         nome_cliente="Carlos Eduardo",
         whatsapp_cliente="91988887777",
-        esporte="Futsal"
+        esporte="Futsal",
     )
     print(resultado_sucesso)
 
@@ -63,6 +83,7 @@ def main():
     print("\n" + "=" * 70)
     print("✅ Todas as 3 ferramentas foram testadas e validadas com sucesso!")
     print("=" * 70)
+
 
 if __name__ == "__main__":
     main()
