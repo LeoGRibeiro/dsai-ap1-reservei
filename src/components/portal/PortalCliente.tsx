@@ -207,9 +207,7 @@ export function PortalCliente() {
     quadraSelecionada,
     horariosSelecionados,
     dataSelecionada,
-    user?.id,
-    user?.bloqueado,
-    user?.telefone,
+    user,
     criarReservaEmProcessamento,
   ]);
 
