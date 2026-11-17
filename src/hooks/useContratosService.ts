@@ -170,7 +170,7 @@ export function useContratosService() {
           return {
             ok: false,
             erros: [
-              "Não foi possível salvar o contrato no banco. Verifique se a migração do schema.sql foi aplicada.",
+              "Não foi possível salvar o contrato no banco. Verifique se as migrações do Supabase foram aplicadas.",
             ],
           };
         }
