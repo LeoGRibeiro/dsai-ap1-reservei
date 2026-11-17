@@ -12,41 +12,32 @@ Se o arquivo `BACKLOG.md` não existir, crie-o.
 
 ---
 
-# Spec-Driven Development (SDD) e Versionamento
+# Regras da AP2 (fork da dupla Alexsandro e Jonathan)
 
-O desenvolvimento segue a metodologia baseada em especificações (`SPEC/`), mantendo a arquitetura documentada antes de grandes implementações.
+Este repositório é a evolução (AP2) do projeto Reservei da AP1. As regras abaixo são medidas por script no próprio repositório e valem para todo trabalho feito com agente. Spec: `SPEC/2026-11-17-fundacao-qualidade.md`.
 
-**Commits:**
-Não é necessário gerar blocos de código de terminal com comandos automáticos de `git commit` ao final de cada resposta. Forneça instruções ou comandos de commit apenas quando explicitamente solicitado pelo usuário ou em marcos consolidados de entrega.
+1. **Sem reescrita**: nunca trocar framework, apagar módulos para refazer ou reescrever arquivos inteiros. Refatoração só localizada, justificada em issue e coberta por teste.
+2. **Spec antes do código**: cada funcionalidade nova tem uma spec datada em `SPEC/AAAA-MM-DD-<slug>.md`, commitada **antes** do primeiro commit de código que a cita. Antes de escrever a spec de uma ideia nova, analise casos de borda e o impacto nos módulos existentes e alinhe com o usuário.
+3. **Commits**: pequenos (mediana abaixo de 400 linhas), em português, tipo convencional no assunto (`feat:`, `fix:`, `docs:`, `test:`, `chore:`, `ci:`) e trailers no rodapé, separados por linha em branco:
+   ```
+   Agent: claude-code/<modelo>
+   Spec: SPEC/<arquivo>.md
+   ```
+   Nunca adicionar `Co-Authored-By` nem rodapés do tipo "Generated with". Não gerar comandos de commit sem o usuário pedir.
+4. **Sessões**: para cada dia com commit feito com agente, salvar a sessão em `prompts/sessoes/` com o total de tokens ou custo. Remover segredos antes de commitar.
+5. **Testes**: escreva o teste antes da implementação e confirme que ele falha sem a mudança. Cobertura mínima de 70% nas linhas novas (o CI mede com diff coverage). Teste regra de negócio e comportamento, não apenas renderização.
+6. **Qualidade antes de volume**: não escreva código, comentários ou JSDoc para aumentar contagem de linhas. Código duplicado deve ficar abaixo de 5% (`jscpd`): reutilize funções existentes em vez de copiar.
+7. **CI e revisão**: todo merge na `main` é por PR aprovado pela dupla, com o CI verde (`.github/workflows/ci.yml`). Nunca `git push --force` na `main`.
+8. **Segredos**: nunca commitar `.env`, chaves ou tokens. O gitleaks roda no CI sobre todo o histórico.
 
 ---
 
-# Estilo de Desenvolvimento e Metas de Arquitetura (Projeto AP1)
+# Estilo de Desenvolvimento
 
-A partir de agora, incorpore rigorosamente as seguintes posturas como Tech Lead para ajudar a atingir a meta do projeto (100 mil LOCs de código útil) de forma orgânica e profissional:
-
-1. **Nunca omita código**:
-   Sempre forneça os arquivos de código completos nas suas respostas. Nunca utilize comentários como `// restante do código igual` ou `// ...`. Apenas escreva todo o código editado.
-
-2. **Arquitetura "Enterprise" e Separação de Responsabilidades**:
-   - Quebre a lógica ao máximo: `Entities/Models`, `UseCases/Services`, `Mappers` e `Hooks Customizados`.
-   - Crie painéis de administração complexos sempre que houver novas features para o usuário.
-   - Isole a comunicação com o Supabase usando repositórios, serviços tipados e blocos Try/Catch detalhados.
-
-3. **Geração Orgânica de Linhas de Código (LOC)**:
-   - **Documentação**: Use JSDoc detalhado em todos os componentes, interfaces e funções, explicando parâmetros, retornos e dando exemplos de uso.
-   - **Testes Extensivos**: Escreva testes rigorosos (`.spec.ts` ou `.test.tsx`) focados na regra de negócio (sucesso, erro, carregamentos) e interações. Isso é essencial para a métrica do projeto e para a estabilidade.
-
-4. **Foco em Estabilidade, não em "Fogo de Artifício"**:
-   - Priorize novas telas, novos fluxos de usuário, relatórios e tratamento de erros (mensagens claras).
-   - **Evite** bibliotecas de animações complexas ou visuais arriscados no momento, para não quebrar os layouts ou perder tempo com retrabalho.
-
-5. **Postura Ativa de Análise (Não seja apenas um anotador)**:
-   - Antes de gerar qualquer código ou Spec para uma nova ideia, atue como um Tech Lead:
-     - Analise casos de uso marginais (edge cases) não previstos.
-     - Avalie a viabilidade e impacto da integração com os módulos já existentes do "Reservei".
-     - Proponha melhorias arquiteturais e funcionais.
-     - Discuta essas considerações e **só após o alinhamento com o usuário escreva a especificação na pasta `SPEC/`**.
+1. **Separação de responsabilidades**: regra de negócio pura em `src/lib/<dominio>/`, acesso ao Supabase em `src/lib/supabase/` (com `try/catch` e mensagens de erro claras), hooks em `src/hooks/` e componentes só com apresentação.
+2. **Documentação proporcional**: JSDoc em funções exportadas com regra de negócio não óbvia. Não documente o óbvio.
+3. **Estabilidade, não "fogo de artifício"**: priorize fluxos completos, tratamento de erros e mensagens claras. Evite bibliotecas de animação ou dependências novas sem necessidade.
+4. **Postura ativa de análise**: antes de implementar, aponte casos de borda, riscos e impactos nos módulos existentes. Quando o usuário mencionar algo que "por enquanto não terá", registre em `BACKLOG.md` (seção acima).
 
 ---
 
