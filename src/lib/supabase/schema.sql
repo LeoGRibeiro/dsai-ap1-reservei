@@ -1,10 +1,29 @@
 -- ==============================================================================
--- Schema da Tabela 'reservas' para o Supabase (PostgreSQL)
+-- Reservei: schema consolidado do banco (Supabase / PostgreSQL)
+-- Spec: SPEC/2026-11-17-correcao-schema-banco-novo.md
+--
+-- Script idempotente: pode ser executado mais de uma vez no SQL Editor do
+-- Supabase sem erro. Reproduz o modelo de dados herdado da AP1, com as
+-- correções necessárias para que ele rode em um banco vazio:
+--   1. reservas.user_id passa a ser TEXT (o app grava ids "usr_..."; a coluna
+--      UUID com FK para auth.users fazia o insert falhar e o serviço removia
+--      o user_id do payload em silêncio).
+--   2. Removidas as referências à tabela "profiles", que nunca era criada e
+--      não é usada pelo código (o app usa "usuarios").
+--   3. Corrigido o bloco da policy de contratos_recorrentes (faltava END IF).
+--   4. Corrigida a codificação de caracteres dos comentários.
+--
+-- ATENÇÃO: as policies abaixo continuam permissivas (USING true), como na AP1.
+-- O endurecimento de segurança (Supabase Auth, RLS por usuário e por admin)
+-- será feito em migrações próprias, cada uma com a sua spec.
 -- ==============================================================================
 
+-- ------------------------------------------------------------------------------
+-- 1. Reservas (avulsas, manuais, ocorrências de contratos e bloqueios)
+-- ------------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.reservas (
   id TEXT PRIMARY KEY,
-  user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  user_id TEXT,
   quadra_id TEXT NOT NULL,
   nome_cliente TEXT NOT NULL DEFAULT '',
   whatsapp_cliente TEXT NOT NULL DEFAULT '',
@@ -17,141 +36,100 @@ CREATE TABLE IF NOT EXISTS public.reservas (
   valor_total NUMERIC(10, 2) NOT NULL DEFAULT 0,
   valor_sinal NUMERIC(10, 2) NOT NULL DEFAULT 0,
   valor_pendente NUMERIC(10, 2) NOT NULL DEFAULT 0,
+  valor_original NUMERIC(10, 2),
+  desconto_fidelidade NUMERIC(10, 2) DEFAULT 0,
+  vouchers_utilizados TEXT[] DEFAULT '{}',
+  reserva_gratuita_fidelidade BOOLEAN DEFAULT FALSE,
+  metodo_pagamento TEXT DEFAULT 'pix',
   status TEXT NOT NULL DEFAULT 'em_processamento',
   status_whatsapp TEXT NOT NULL DEFAULT 'nao_enviado',
   esporte TEXT,
   observacoes TEXT,
+  contrato_id TEXT,
+  tipo_reserva TEXT DEFAULT 'avulsa',
+  aviso_cancelamento_em DATE,
+  permite_vagas BOOLEAN DEFAULT FALSE,
+  vagas_abertas INTEGER DEFAULT 0,
   criada_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Migração incremental caso a coluna user_id não exista em bases já criadas
-ALTER TABLE public.reservas ADD COLUMN IF NOT EXISTS user_id TEXT;
+-- Bancos criados com o script antigo: garante as colunas novas.
 ALTER TABLE public.reservas ADD COLUMN IF NOT EXISTS valor_original NUMERIC(10, 2);
 ALTER TABLE public.reservas ADD COLUMN IF NOT EXISTS desconto_fidelidade NUMERIC(10, 2) DEFAULT 0;
 ALTER TABLE public.reservas ADD COLUMN IF NOT EXISTS vouchers_utilizados TEXT[] DEFAULT '{}';
-ALTER TABLE public.reservas ADD COLUMN IF NOT EXISTS reserva_gratuita_fidelidade BOOLEAN DEFAULT false;
+ALTER TABLE public.reservas ADD COLUMN IF NOT EXISTS reserva_gratuita_fidelidade BOOLEAN DEFAULT FALSE;
 ALTER TABLE public.reservas ADD COLUMN IF NOT EXISTS metodo_pagamento TEXT DEFAULT 'pix';
+ALTER TABLE public.reservas ADD COLUMN IF NOT EXISTS contrato_id TEXT;
+ALTER TABLE public.reservas ADD COLUMN IF NOT EXISTS tipo_reserva TEXT DEFAULT 'avulsa';
+ALTER TABLE public.reservas ADD COLUMN IF NOT EXISTS aviso_cancelamento_em DATE;
+ALTER TABLE public.reservas ADD COLUMN IF NOT EXISTS permite_vagas BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.reservas ADD COLUMN IF NOT EXISTS vagas_abertas INTEGER DEFAULT 0;
 
+CREATE INDEX IF NOT EXISTS idx_reservas_data_quadra ON public.reservas (data, quadra_id);
+CREATE INDEX IF NOT EXISTS idx_reservas_status ON public.reservas (status);
+CREATE INDEX IF NOT EXISTS idx_reservas_contrato ON public.reservas (contrato_id);
+CREATE INDEX IF NOT EXISTS idx_reservas_user ON public.reservas (user_id);
 
--- Tabela de Usuários para Login com WhatsApp e Senha (sem exigência de provedor de SMS pago)
+ALTER TABLE public.reservas ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Permitir leitura pública de reservas" ON public.reservas;
+CREATE POLICY "Permitir leitura pública de reservas"
+  ON public.reservas FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Permitir inserção de novas reservas" ON public.reservas;
+CREATE POLICY "Permitir inserção de novas reservas"
+  ON public.reservas FOR INSERT WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Permitir atualização de reservas" ON public.reservas;
+CREATE POLICY "Permitir atualização de reservas"
+  ON public.reservas FOR UPDATE USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Permitir remoção de reservas" ON public.reservas;
+CREATE POLICY "Permitir remoção de reservas"
+  ON public.reservas FOR DELETE USING (true);
+
+-- Realtime na tabela de reservas (agenda e portal atualizam ao vivo).
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime')
+     AND NOT EXISTS (
+       SELECT 1 FROM pg_publication_tables
+       WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = 'reservas'
+     ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.reservas;
+  END IF;
+END $$;
+
+-- ------------------------------------------------------------------------------
+-- 2. Usuários (cadastro por WhatsApp e senha)
+-- Será substituído pelo Supabase Auth na spec de autenticação de clientes.
+-- ------------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.usuarios (
   id TEXT PRIMARY KEY,
   nome TEXT NOT NULL DEFAULT '',
   telefone TEXT UNIQUE NOT NULL,
   senha TEXT NOT NULL,
   data_nascimento DATE,
+  bloqueado BOOLEAN DEFAULT FALSE,
+  motivo_bloqueio TEXT,
   criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+ALTER TABLE public.usuarios ADD COLUMN IF NOT EXISTS bloqueado BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.usuarios ADD COLUMN IF NOT EXISTS motivo_bloqueio TEXT;
+
 CREATE INDEX IF NOT EXISTS idx_usuarios_telefone ON public.usuarios (telefone);
 
--- Habilitar RLS em usuarios
 ALTER TABLE public.usuarios ENABLE ROW LEVEL SECURITY;
 
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_policies WHERE tablename = 'usuarios' AND policyname = 'Permitir acesso completo a usuarios'
-  ) THEN
-    CREATE POLICY "Permitir acesso completo a usuarios"
-      ON public.usuarios FOR ALL
-      USING (true)
-      WITH CHECK (true);
-  END IF;
-END $$;
+DROP POLICY IF EXISTS "Permitir acesso completo a usuarios" ON public.usuarios;
+CREATE POLICY "Permitir acesso completo a usuarios"
+  ON public.usuarios FOR ALL USING (true) WITH CHECK (true);
 
--- Índices para consultas otimizadas da agenda e prevenção de double booking
-CREATE INDEX IF NOT EXISTS idx_reservas_data_quadra ON public.reservas (data, quadra_id);
-CREATE INDEX IF NOT EXISTS idx_reservas_status ON public.reservas (status);
-
--- Habilitar Row Level Security (RLS)
-ALTER TABLE public.reservas ENABLE ROW LEVEL SECURITY;
-
--- Políticas de acesso para a Anon Key
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_policies WHERE tablename = 'reservas' AND policyname = 'Permitir leitura pública de reservas'
-  ) THEN
-    CREATE POLICY "Permitir leitura pública de reservas"
-      ON public.reservas FOR SELECT
-      USING (true);
-  END IF;
-
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_policies WHERE tablename = 'reservas' AND policyname = 'Permitir inserção de novas reservas'
-  ) THEN
-    CREATE POLICY "Permitir inserção de novas reservas"
-      ON public.reservas FOR INSERT
-      WITH CHECK (true);
-  END IF;
-
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_policies WHERE tablename = 'reservas' AND policyname = 'Permitir atualização de reservas'
-  ) THEN
-    CREATE POLICY "Permitir atualização de reservas"
-      ON public.reservas FOR UPDATE
-      USING (true)
-      WITH CHECK (true);
-  END IF;
-
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_policies WHERE tablename = 'reservas' AND policyname = 'Permitir remoção de reservas'
-  ) THEN
-    CREATE POLICY "Permitir remoção de reservas"
-      ON public.reservas FOR DELETE
-      USING (true);
-  END IF;
-END $$;
-
--- Habilitar RLS em profiles
-ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
-
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_policies WHERE tablename = 'profiles' AND policyname = 'Permitir leitura de perfis'
-  ) THEN
-    CREATE POLICY "Permitir leitura de perfis"
-      ON public.profiles FOR SELECT
-      USING (true);
-  END IF;
-
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_policies WHERE tablename = 'profiles' AND policyname = 'Permitir inserção e atualização do próprio perfil'
-  ) THEN
-    CREATE POLICY "Permitir inserção e atualização do próprio perfil"
-      ON public.profiles FOR ALL
-      USING (true)
-      WITH CHECK (true);
-  END IF;
-END $$;
-
--- Habilita Realtime na publicação padrão do Supabase
-DO $$
-BEGIN
-  IF EXISTS (
-    SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime'
-  ) THEN
-    ALTER PUBLICATION supabase_realtime ADD TABLE public.reservas;
-  END IF;
-EXCEPTION
-  WHEN duplicate_object THEN NULL;
-END $$;
-
--- ==============================================================================
--- Reservas recorrentes (Escolinhas e Grupos Comuns)
+-- ------------------------------------------------------------------------------
+-- 3. Contratos recorrentes (escolinhas e grupos fixos)
 -- Spec: SPEC/2026-10-05-reservas-recorrentes.md
--- ==============================================================================
-
--- Campos que ligam cada ocorrência (reserva materializada) ao seu contrato
-ALTER TABLE public.reservas ADD COLUMN IF NOT EXISTS contrato_id TEXT;
-ALTER TABLE public.reservas ADD COLUMN IF NOT EXISTS tipo_reserva TEXT DEFAULT 'avulsa';
-ALTER TABLE public.reservas ADD COLUMN IF NOT EXISTS aviso_cancelamento_em DATE;
-
-CREATE INDEX IF NOT EXISTS idx_reservas_contrato ON public.reservas (contrato_id);
-
--- Contratos recorrentes: um registro por escolinha ou grupo
+-- ------------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.contratos_recorrentes (
   id TEXT PRIMARY KEY,
   tipo TEXT NOT NULL CHECK (tipo IN ('escolinha', 'grupo')),
@@ -179,27 +157,14 @@ CREATE INDEX IF NOT EXISTS idx_contratos_tipo ON public.contratos_recorrentes (t
 
 ALTER TABLE public.contratos_recorrentes ENABLE ROW LEVEL SECURITY;
 
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_policies WHERE tablename = 'contratos_recorrentes' AND policyname = 'Permitir acesso completo a contratos'
-  ) THEN
-    CREATE POLICY "Permitir acesso completo a contratos"
-      ON public.contratos_recorrentes FOR ALL
-      USING (true)
-      WITH CHECK (true);
-END $$;
+DROP POLICY IF EXISTS "Permitir acesso completo a contratos" ON public.contratos_recorrentes;
+CREATE POLICY "Permitir acesso completo a contratos"
+  ON public.contratos_recorrentes FOR ALL USING (true) WITH CHECK (true);
 
--- ==============================================================================
--- Sistema de Vagas Abertas para Jogadores
+-- ------------------------------------------------------------------------------
+-- 4. Vagas abertas para jogadores
 -- Spec: SPEC/2026-10-05-sistema-vagas-jogadores.md
--- ==============================================================================
-
--- 1. Colunas adicionais na tabela 'reservas'
-ALTER TABLE public.reservas ADD COLUMN IF NOT EXISTS permite_vagas BOOLEAN DEFAULT FALSE;
-ALTER TABLE public.reservas ADD COLUMN IF NOT EXISTS vagas_abertas INTEGER DEFAULT 0;
-
--- 2. Tabela de Interesses de Vagas
+-- ------------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.interesses_vagas (
   id TEXT PRIMARY KEY,
   reserva_id TEXT NOT NULL REFERENCES public.reservas(id) ON DELETE CASCADE,
@@ -210,31 +175,19 @@ CREATE TABLE IF NOT EXISTS public.interesses_vagas (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Índices para consultas otimizadas
 CREATE INDEX IF NOT EXISTS idx_interesses_reserva ON public.interesses_vagas (reserva_id);
 CREATE INDEX IF NOT EXISTS idx_interesses_usuario ON public.interesses_vagas (usuario_id);
 
--- Habilitar Row Level Security (RLS)
 ALTER TABLE public.interesses_vagas ENABLE ROW LEVEL SECURITY;
 
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_policies WHERE tablename = 'interesses_vagas' AND policyname = 'Permitir acesso completo a interesses_vagas'
-  ) THEN
-    CREATE POLICY "Permitir acesso completo a interesses_vagas"
-      ON public.interesses_vagas FOR ALL
-      USING (true)
-      WITH CHECK (true);
-  END IF;
-END $$;
+DROP POLICY IF EXISTS "Permitir acesso completo a interesses_vagas" ON public.interesses_vagas;
+CREATE POLICY "Permitir acesso completo a interesses_vagas"
+  ON public.interesses_vagas FOR ALL USING (true) WITH CHECK (true);
 
--- ==============================================================================
--- Sistema de Fidelidade (Ticket Médio e Recompensas)
+-- ------------------------------------------------------------------------------
+-- 5. Programa de fidelidade (campanha, selos e vouchers)
 -- Spec: SPEC/2026-10-05-sistema-fidelidade.md
--- ==============================================================================
-
--- 1. Tabela de Configuração da Campanha
+-- ------------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.fidelidade_campanha (
   id TEXT PRIMARY KEY DEFAULT 'campanha_padrao',
   nome TEXT NOT NULL DEFAULT 'Fidelidade Campeão Reservei',
@@ -245,27 +198,16 @@ CREATE TABLE IF NOT EXISTS public.fidelidade_campanha (
   atualizado_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Insere campanha padrão se não existir
 INSERT INTO public.fidelidade_campanha (id, nome, horas_necessarias, meses_validade, dias_validade_voucher, ativo)
-VALUES ('campanha_padrao', 'Fidelidade Campeão Reservei', 12, 3, 60, true)
+VALUES ('campanha_padrao', 'Fidelidade Campeão Reservei', 12, 3, 60, TRUE)
 ON CONFLICT (id) DO NOTHING;
 
--- Habilitar RLS em fidelidade_campanha
 ALTER TABLE public.fidelidade_campanha ENABLE ROW LEVEL SECURITY;
 
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_policies WHERE tablename = 'fidelidade_campanha' AND policyname = 'Permitir acesso completo a fidelidade_campanha'
-  ) THEN
-    CREATE POLICY "Permitir acesso completo a fidelidade_campanha"
-      ON public.fidelidade_campanha FOR ALL
-      USING (true)
-      WITH CHECK (true);
-  END IF;
-END $$;
+DROP POLICY IF EXISTS "Permitir acesso completo a fidelidade_campanha" ON public.fidelidade_campanha;
+CREATE POLICY "Permitir acesso completo a fidelidade_campanha"
+  ON public.fidelidade_campanha FOR ALL USING (true) WITH CHECK (true);
 
--- 2. Tabela de Selos de Horas Concluídas
 CREATE TABLE IF NOT EXISTS public.fidelidade_selos (
   id TEXT PRIMARY KEY,
   usuario_id TEXT NOT NULL,
@@ -283,22 +225,12 @@ CREATE TABLE IF NOT EXISTS public.fidelidade_selos (
 CREATE INDEX IF NOT EXISTS idx_fidelidade_selos_usuario ON public.fidelidade_selos (usuario_id, resgatado, expira_em);
 CREATE INDEX IF NOT EXISTS idx_fidelidade_selos_reserva ON public.fidelidade_selos (reserva_id);
 
--- Habilitar RLS em fidelidade_selos
 ALTER TABLE public.fidelidade_selos ENABLE ROW LEVEL SECURITY;
 
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_policies WHERE tablename = 'fidelidade_selos' AND policyname = 'Permitir acesso completo a fidelidade_selos'
-  ) THEN
-    CREATE POLICY "Permitir acesso completo a fidelidade_selos"
-      ON public.fidelidade_selos FOR ALL
-      USING (true)
-      WITH CHECK (true);
-  END IF;
-END $$;
+DROP POLICY IF EXISTS "Permitir acesso completo a fidelidade_selos" ON public.fidelidade_selos;
+CREATE POLICY "Permitir acesso completo a fidelidade_selos"
+  ON public.fidelidade_selos FOR ALL USING (true) WITH CHECK (true);
 
--- 3. Tabela de Vouchers Conquistados
 CREATE TABLE IF NOT EXISTS public.fidelidade_vouchers (
   id TEXT PRIMARY KEY,
   codigo TEXT UNIQUE NOT NULL,
@@ -314,43 +246,16 @@ CREATE TABLE IF NOT EXISTS public.fidelidade_vouchers (
 CREATE INDEX IF NOT EXISTS idx_fidelidade_vouchers_usuario ON public.fidelidade_vouchers (usuario_id, status);
 CREATE INDEX IF NOT EXISTS idx_fidelidade_vouchers_codigo ON public.fidelidade_vouchers (codigo);
 
--- Habilitar RLS em fidelidade_vouchers
 ALTER TABLE public.fidelidade_vouchers ENABLE ROW LEVEL SECURITY;
 
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_policies WHERE tablename = 'fidelidade_vouchers' AND policyname = 'Permitir acesso completo a fidelidade_vouchers'
-  ) THEN
-    CREATE POLICY "Permitir acesso completo a fidelidade_vouchers"
-      ON public.fidelidade_vouchers FOR ALL
-      USING (true)
-      WITH CHECK (true);
-  END IF;
-END $$;
+DROP POLICY IF EXISTS "Permitir acesso completo a fidelidade_vouchers" ON public.fidelidade_vouchers;
+CREATE POLICY "Permitir acesso completo a fidelidade_vouchers"
+  ON public.fidelidade_vouchers FOR ALL USING (true) WITH CHECK (true);
 
-
-
--- ==============================================================================
--- Bloqueio de Usu�rios
--- Spec: SPEC/2026-10-06-bloqueio-usuarios.md
--- ==============================================================================
-
--- Adiciona os campos � tabela profiles
-ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS bloqueado BOOLEAN DEFAULT FALSE;
-ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS motivo_bloqueio TEXT;
-
-
-ALTER TABLE public.usuarios ADD COLUMN IF NOT EXISTS bloqueado BOOLEAN DEFAULT FALSE;
-ALTER TABLE public.usuarios ADD COLUMN IF NOT EXISTS motivo_bloqueio TEXT;
-
-
--- ==============================================================================
--- Landing Page: Conteúdo Institucional (Estrutura e Escolinhas)
+-- ------------------------------------------------------------------------------
+-- 6. Landing page: conteúdo institucional (galeria e escolinhas)
 -- Spec: SPEC/2026-10-06-lp-conteudo-institucional.md
--- ==============================================================================
-
--- 1. Tabela de Galeria de Fotos da Estrutura Física
+-- ------------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.landing_page_gallery (
   id TEXT PRIMARY KEY,
   image_url TEXT NOT NULL,
@@ -358,37 +263,23 @@ CREATE TABLE IF NOT EXISTS public.landing_page_gallery (
   description TEXT NOT NULL,
   categoria TEXT NOT NULL DEFAULT 'quadras',
   display_order INTEGER NOT NULL DEFAULT 0,
-  is_active BOOLEAN NOT NULL DEFAULT true,
+  is_active BOOLEAN NOT NULL DEFAULT TRUE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_lp_gallery_order ON public.landing_page_gallery (display_order, is_active);
 CREATE INDEX IF NOT EXISTS idx_lp_gallery_categoria ON public.landing_page_gallery (categoria);
 
--- Habilitar RLS em landing_page_gallery
 ALTER TABLE public.landing_page_gallery ENABLE ROW LEVEL SECURITY;
 
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_policies WHERE tablename = 'landing_page_gallery' AND policyname = 'Permitir leitura pública de fotos da galeria'
-  ) THEN
-    CREATE POLICY "Permitir leitura pública de fotos da galeria"
-      ON public.landing_page_gallery FOR SELECT
-      USING (true);
-  END IF;
+DROP POLICY IF EXISTS "Permitir leitura pública de fotos da galeria" ON public.landing_page_gallery;
+CREATE POLICY "Permitir leitura pública de fotos da galeria"
+  ON public.landing_page_gallery FOR SELECT USING (true);
 
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_policies WHERE tablename = 'landing_page_gallery' AND policyname = 'Permitir gestão completa de fotos da galeria'
-  ) THEN
-    CREATE POLICY "Permitir gestão completa de fotos da galeria"
-      ON public.landing_page_gallery FOR ALL
-      USING (true)
-      WITH CHECK (true);
-  END IF;
-END $$;
+DROP POLICY IF EXISTS "Permitir gestão completa de fotos da galeria" ON public.landing_page_gallery;
+CREATE POLICY "Permitir gestão completa de fotos da galeria"
+  ON public.landing_page_gallery FOR ALL USING (true) WITH CHECK (true);
 
--- 2. Tabela de Escolinhas Esportivas
 CREATE TABLE IF NOT EXISTS public.landing_page_schools (
   id TEXT PRIMARY KEY,
   contrato_id TEXT,
@@ -399,58 +290,34 @@ CREATE TABLE IF NOT EXISTS public.landing_page_schools (
   whatsapp_number TEXT NOT NULL,
   descricao TEXT,
   faixa_etaria TEXT,
-  is_active BOOLEAN NOT NULL DEFAULT true,
+  is_active BOOLEAN NOT NULL DEFAULT TRUE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 ALTER TABLE public.landing_page_schools ADD COLUMN IF NOT EXISTS contrato_id TEXT;
+
 CREATE INDEX IF NOT EXISTS idx_lp_schools_active ON public.landing_page_schools (is_active, sport_name);
 CREATE INDEX IF NOT EXISTS idx_lp_schools_contrato ON public.landing_page_schools (contrato_id);
 
--- Habilitar RLS em landing_page_schools
 ALTER TABLE public.landing_page_schools ENABLE ROW LEVEL SECURITY;
 
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_policies WHERE tablename = 'landing_page_schools' AND policyname = 'Permitir leitura pública de escolinhas'
-  ) THEN
-    CREATE POLICY "Permitir leitura pública de escolinhas"
-      ON public.landing_page_schools FOR SELECT
-      USING (true);
-  END IF;
+DROP POLICY IF EXISTS "Permitir leitura pública de escolinhas" ON public.landing_page_schools;
+CREATE POLICY "Permitir leitura pública de escolinhas"
+  ON public.landing_page_schools FOR SELECT USING (true);
 
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_policies WHERE tablename = 'landing_page_schools' AND policyname = 'Permitir gestão completa de escolinhas'
-  ) THEN
-    CREATE POLICY "Permitir gestão completa de escolinhas"
-      ON public.landing_page_schools FOR ALL
-      USING (true)
-      WITH CHECK (true);
-  END IF;
-END $$;
+DROP POLICY IF EXISTS "Permitir gestão completa de escolinhas" ON public.landing_page_schools;
+CREATE POLICY "Permitir gestão completa de escolinhas"
+  ON public.landing_page_schools FOR ALL USING (true) WITH CHECK (true);
 
--- 3. Storage Bucket para fotos institucionais
+-- Bucket público para as fotos institucionais.
 INSERT INTO storage.buckets (id, name, public)
-VALUES ('institucional', 'institucional', true)
+VALUES ('institucional', 'institucional', TRUE)
 ON CONFLICT (id) DO NOTHING;
 
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_policies WHERE tablename = 'objects' AND schemaname = 'storage' AND policyname = 'Permitir leitura pública do bucket institucional'
-  ) THEN
-    CREATE POLICY "Permitir leitura pública do bucket institucional"
-      ON storage.objects FOR SELECT
-      USING (bucket_id = 'institucional');
-  END IF;
+DROP POLICY IF EXISTS "Permitir leitura pública do bucket institucional" ON storage.objects;
+CREATE POLICY "Permitir leitura pública do bucket institucional"
+  ON storage.objects FOR SELECT USING (bucket_id = 'institucional');
 
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_policies WHERE tablename = 'objects' AND schemaname = 'storage' AND policyname = 'Permitir upload no bucket institucional'
-  ) THEN
-    CREATE POLICY "Permitir upload no bucket institucional"
-      ON storage.objects FOR INSERT
-      WITH CHECK (bucket_id = 'institucional');
-  END IF;
-END $$;
-
+DROP POLICY IF EXISTS "Permitir upload no bucket institucional" ON storage.objects;
+CREATE POLICY "Permitir upload no bucket institucional"
+  ON storage.objects FOR INSERT WITH CHECK (bucket_id = 'institucional');
