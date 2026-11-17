@@ -1,6 +1,6 @@
 import React from "react";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { HorarioGrid } from "@/components/portal/HorarioGrid";
 import type { VagaDisponivelItem } from "@/lib/vagas/types";
 
@@ -24,6 +24,15 @@ describe("HorarioGrid - Tag de Vagas Abertas", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockVagasState.vagasDisponiveis = [];
+    // Congela apenas o relógio (Date) na manhã de `dataHoje`, para que os
+    // horários noturnos testados não sejam tratados como expirados conforme
+    // o calendário real avança além da data fixa do teste.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(`${dataHoje}T08:00:00`));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("exibe a tag 'vagas abertas' ao lado de Ocupado quando o horário possui vagas disponíveis", () => {
