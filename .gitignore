@@ -31,6 +31,3 @@ __pycache__/
 *.egg-info/
 dist/
 build/
-# Supabase CLI (arquivos locais)
-supabase/.temp/
-supabase/.branches/
