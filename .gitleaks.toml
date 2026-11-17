@@ -1,0 +1,21 @@
+# Configuração do gitleaks (varredura de segredos no histórico)
+# Spec: SPEC/2026-11-17-fundacao-qualidade.md
+
+title = "Reservei - gitleaks"
+
+[extend]
+useDefault = true
+
+# Exceção restrita a dois commits herdados da AP1 (autores originais).
+# Eles contêm chaves PÚBLICAS (anon key e publishable key) do projeto Supabase
+# dos autores originais, que não é usado por este fork. Chaves públicas do
+# Supabase são feitas para ir ao navegador; o risco real era a RLS permissiva,
+# tratada nas specs de segurança. O histórico não pode ser reescrito (regra da
+# disciplina: nada de push --force na main), por isso a exceção é por commit e
+# não silencia nenhuma ocorrência nova.
+[[allowlists]]
+description = "Chaves públicas do Supabase dos autores originais em commits da AP1"
+commits = [
+  "28c16e711e0fc04f00a73b38d347e771dd5ce960",
+  "3d55f8fd696708be69c171d606cdbc5bbd6bdcbb",
+]

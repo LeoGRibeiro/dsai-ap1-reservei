@@ -1,0 +1,92 @@
+# Integração contínua do Reservei
+# Spec: SPEC/2026-11-17-fundacao-qualidade.md
+#
+# Roda em todo PR e em todo push na main. Três jobs independentes:
+#   app       lint, typecheck, testes com cobertura, build e, em PR, cobertura
+#             do código novo (diff coverage >= 70%, meta da disciplina)
+#   mcp       testes do servidor MCP em Python
+#   segredos  gitleaks no histórico completo do repositório
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  app:
+    name: App (lint, tipos, testes, build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: src
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: src/package-lock.json
+
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run test:coverage
+      - run: npm run build
+
+      - uses: actions/setup-python@v5
+        if: github.event_name == 'pull_request'
+        with:
+          python-version: "3.11"
+
+      - name: Cobertura do código novo (mínimo 70%)
+        if: github.event_name == 'pull_request'
+        working-directory: .
+        run: |
+          python -m pip install --quiet diff-cover
+          node scripts/ci/normalizar-lcov.mjs src/coverage/lcov.info coverage-repo.lcov
+          diff-cover coverage-repo.lcov --compare-branch="origin/${{ github.base_ref }}" --fail-under=70
+
+  mcp:
+    name: Servidor MCP (pytest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: mcp_server/requirements.txt
+
+      - run: python -m pip install -r mcp_server/requirements.txt pytest
+      - run: python -m pytest -q tests
+
+  segredos:
+    name: Segredos (gitleaks)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Varre todos os commits do histórico, com a configuração do repositório
+      # (.gitleaks.toml). Os valores encontrados são ocultados no log.
+      - name: Varredura do histórico
+        run: |
+          docker run --rm -v "$PWD:/repo" ghcr.io/gitleaks/gitleaks:latest \
+            git /repo --config /repo/.gitleaks.toml --redact --verbose
