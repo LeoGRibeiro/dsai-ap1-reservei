@@ -15,7 +15,7 @@ import re
 import sys
 import uuid
 import time
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Mapping, Tuple
 from pathlib import Path
 import requests
 from dotenv import load_dotenv
@@ -50,25 +50,62 @@ def carregar_configuracao_ambiente() -> None:
 
 carregar_configuracao_ambiente()
 
-# Credenciais do Supabase (lidas de variáveis de ambiente com fallback para a nuvem pública do Reservei)
-DEFAULT_SUPABASE_URL = "https://wjtckujicvryvifbamug.supabase.co"
-DEFAULT_SUPABASE_KEY = (
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9."
-    "eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndqdGNrdWppY3ZyeXZpZmJhbXVnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA4MTQ1MjEsImV4cCI6MjEwNjM5MDUyMX0."
-    "jbuAoRXoVwZpAeGGUlaIV2bK3EPdfk4I1o7axDxfJ68"
+# Credenciais do Supabase: lidas SOMENTE de variáveis de ambiente.
+# Spec: SPEC/2026-11-17-fundacao-qualidade.md
+# Não há mais URL nem chave embutidas no código. Sem configuração, o servidor
+# funciona em modo local (memória), sem acessar nenhum banco.
+
+_VARIAVEIS_URL = ("NEXT_PUBLIC_SUPABASE_URL", "SUPABASE_URL")
+_VARIAVEIS_CHAVE = (
+    "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
+    "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+    "SUPABASE_PUBLISHABLE_KEY",
+    "SUPABASE_ANON_KEY",
 )
 
-SUPABASE_URL = (
-    os.getenv("NEXT_PUBLIC_SUPABASE_URL")
-    or os.getenv("SUPABASE_URL")
-    or DEFAULT_SUPABASE_URL
-).rstrip("/")
 
-SUPABASE_KEY = (
-    os.getenv("NEXT_PUBLIC_SUPABASE_ANON_KEY")
-    or os.getenv("SUPABASE_ANON_KEY")
-    or DEFAULT_SUPABASE_KEY
-)
+def resolver_credenciais(ambiente: Mapping[str, str]) -> Tuple[str, str]:
+    """
+    Resolve a URL e a chave pública do Supabase a partir das variáveis de ambiente.
+
+    Aceita os nomes usados pelo app Next.js (``NEXT_PUBLIC_*``) e nomes curtos.
+    A chave pode ser a publishable key nova (``sb_publishable_...``) ou a anon key JWT.
+
+    Args:
+        ambiente: Mapeamento de variáveis (normalmente ``os.environ``).
+
+    Returns:
+        Tupla ``(url, chave)``; strings vazias quando não configuradas.
+    """
+    url = next((ambiente.get(n, "") for n in _VARIAVEIS_URL if ambiente.get(n)), "")
+    chave = next((ambiente.get(n, "") for n in _VARIAVEIS_CHAVE if ambiente.get(n)), "")
+    return url.strip().rstrip("/"), chave.strip()
+
+
+def montar_headers_supabase(chave: str) -> Dict[str, str]:
+    """
+    Monta os cabeçalhos da REST API do Supabase.
+
+    A publishable key nova não é um JWT e não pode ir no cabeçalho
+    ``Authorization``; só a anon key antiga (JWT, começa com ``eyJ``) vai como Bearer.
+
+    Args:
+        chave: Chave pública do projeto.
+
+    Returns:
+        Dicionário de cabeçalhos HTTP.
+    """
+    headers = {
+        "apikey": chave,
+        "Content-Type": "application/json",
+        "Prefer": "return=representation",
+    }
+    if chave.startswith("eyJ"):
+        headers["Authorization"] = f"Bearer {chave}"
+    return headers
+
+
+SUPABASE_URL, SUPABASE_KEY = resolver_credenciais(os.environ)
 
 # ─── Constantes do Domínio Reservei ──────────────────────────────────────────
 
@@ -94,12 +131,7 @@ _LOCAL_FALLBACK_RESERVAS: List[Dict[str, Any]] = []
 
 def get_supabase_headers() -> Dict[str, str]:
     """Retorna os cabeçalhos HTTP necessários para autenticação na REST API do Supabase."""
-    return {
-        "apikey": SUPABASE_KEY,
-        "Authorization": f"Bearer {SUPABASE_KEY}",
-        "Content-Type": "application/json",
-        "Prefer": "return=representation",
-    }
+    return montar_headers_supabase(SUPABASE_KEY)
 
 
 def normalizar_quadra_id(quadra_input: str) -> Optional[str]:
@@ -158,7 +190,7 @@ def listar_reservas_supabase(data_filtro: Optional[str] = None) -> List[Dict[str
         if resp.status_code == 200:
             return resp.json()
     except Exception as err:
-        print(f"[Aviso MCP] Falha na consulta ao Supabase ({err}). Utilizando armazenamento local.")
+        print(f"[Aviso MCP] Falha na consulta ao Supabase ({err}). Utilizando armazenamento local.", file=sys.stderr)
 
     return [r for r in _LOCAL_FALLBACK_RESERVAS if not data_filtro or r.get("data") == data_filtro]
 
@@ -171,7 +203,8 @@ def salvar_reserva_supabase(reserva: Dict[str, Any]) -> bool:
         reserva: Dicionário formatado de acordo com o esquema da tabela 'reservas'.
         
     Returns:
-        True indicando sucesso na gravação ou fallback operacional.
+        True se a reserva foi gravada no Supabase (ou em memória, quando o Supabase
+        não está configurado); False se o Supabase está configurado e a gravação falhou.
     """
     _LOCAL_FALLBACK_RESERVAS.append(reserva)
 
@@ -183,12 +216,14 @@ def salvar_reserva_supabase(reserva: Dict[str, Any]) -> bool:
         resp = requests.post(url, headers=get_supabase_headers(), json=reserva, timeout=5)
         if resp.status_code in (200, 201):
             return True
-        print(f"[Aviso MCP] Erro ao gravar reserva no Supabase: {resp.status_code} - {resp.text}")
+        print(f"[Aviso MCP] Erro ao gravar reserva no Supabase: {resp.status_code} - {resp.text}", file=sys.stderr)
     except Exception as err:
-        print(f"[Aviso MCP] Falha de rede ao gravar no Supabase: {err}")
+        print(f"[Aviso MCP] Falha de rede ao gravar no Supabase: {err}", file=sys.stderr)
 
-    # Retorna True se gravou ao menos localmente para não interromper a conversa do usuário
-    return True
+    # Com o Supabase configurado, falha de gravação é falha da operação: a reserva
+    # não existe na agenda real e o agente não pode informar sucesso ao usuário.
+    _LOCAL_FALLBACK_RESERVAS.remove(reserva)
+    return False
 
 # ─── Inicialização do Servidor FastMCP ────────────────────────────────────────
 
