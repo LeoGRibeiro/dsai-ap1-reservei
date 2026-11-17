@@ -1,0 +1,4 @@
+# Configuração mínima do Supabase CLI.
+# Usada pelo pipeline .github/workflows/supabase-migracoes.yml (supabase link / db push).
+# Spec: SPEC/2026-11-17-pipeline-migracoes-supabase.md
+project_id = "dsai-ap2-reservei"

@@ -1,6 +1,10 @@
 -- ==============================================================================
 -- Reservei: schema consolidado do banco (Supabase / PostgreSQL)
 -- Spec: SPEC/2026-11-17-correcao-schema-banco-novo.md
+-- Spec: SPEC/2026-11-17-pipeline-migracoes-supabase.md
+--
+-- Migração base: cria todo o modelo herdado da AP1. As próximas mudanças de
+-- banco são feitas em migrações novas nesta pasta, aplicadas pelo pipeline.
 --
 -- Script idempotente: pode ser executado mais de uma vez no SQL Editor do
 -- Supabase sem erro. Reproduz o modelo de dados herdado da AP1, com as
