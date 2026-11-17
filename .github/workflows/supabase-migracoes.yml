@@ -1,13 +1,12 @@
-# Pipeline de migrações do banco (Supabase)
+# Validação das migrações do banco (Supabase)
 # Spec: SPEC/2026-11-17-pipeline-migracoes-supabase.md
 #
-# - Pull request: valida as migrações contra o banco remoto sem aplicar (dry-run).
-# - Push na main (merge do PR) ou execução manual: aplica as migrações pendentes.
+# Sobe um Supabase local descartável (Docker) e aplica todas as migrações de
+# supabase/migrations do zero. Se alguma migração tiver erro, o job falha no PR,
+# antes do merge. Não usa credenciais e nunca toca o banco de produção.
 #
-# Secrets necessários (Settings > Secrets and variables > Actions):
-#   SUPABASE_ACCESS_TOKEN  token pessoal (supabase.com > Account > Access Tokens)
-#   SUPABASE_PROJECT_ID    referência do projeto (o subdomínio de <ref>.supabase.co)
-#   SUPABASE_DB_PASSWORD   senha do banco Postgres do projeto
+# A aplicação em produção é feita pela integração GitHub do Supabase quando o PR
+# é integrado à main (Project Settings > Integrations > GitHub > Deploy to production).
 
 name: Migrações do Supabase
 
@@ -26,48 +25,36 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: supabase-migracoes
-  cancel-in-progress: false
-
 jobs:
-  migracoes:
+  validar:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
-    env:
-      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
-      SUPABASE_PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
-      - name: Verificar secrets
-        id: secrets
-        run: |
-          if [ -z "$SUPABASE_ACCESS_TOKEN" ] || [ -z "$SUPABASE_DB_PASSWORD" ] || [ -z "$SUPABASE_PROJECT_ID" ]; then
-            echo "::warning::Secrets do Supabase não configurados. Migrações não foram validadas nem aplicadas."
-            echo "configurado=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "configurado=true" >> "$GITHUB_OUTPUT"
-          fi
-
       - uses: supabase/setup-cli@v1
-        if: steps.secrets.outputs.configurado == 'true'
         with:
           version: latest
 
-      - name: Vincular projeto
-        if: steps.secrets.outputs.configurado == 'true'
-        run: supabase link --project-ref "$SUPABASE_PROJECT_ID"
+      # Aplica todas as migrações num banco vazio. Storage e Realtime ficam ligados
+      # porque a migração base cria bucket, policies de storage e publicação Realtime.
+      - name: Subir Supabase local e aplicar migrações
+        run: supabase start -x studio,imgproxy,edge-runtime,logflare,vector,mailpit,supavisor,postgres-meta
 
-      - name: Listar migrações (local x remoto)
-        if: steps.secrets.outputs.configurado == 'true'
-        run: supabase migration list
+      - name: Conferir tabelas criadas
+        run: |
+          supabase migration list --local
+          psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -c "\dt public.*"
 
-      - name: Validar migrações (dry-run)
-        if: steps.secrets.outputs.configurado == 'true' && github.event_name == 'pull_request'
-        run: supabase db push --dry-run --include-all
+      # As migrações precisam poder rodar de novo sem erro (a base já foi
+      # executada manualmente no banco novo antes do pipeline existir).
+      - name: Reexecutar migrações (idempotência)
+        run: |
+          for f in supabase/migrations/*.sql; do
+            echo "Reexecutando $f"
+            psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -q -f "$f"
+          done
 
-      - name: Aplicar migrações
-        if: steps.secrets.outputs.configurado == 'true' && github.event_name != 'pull_request'
-        run: supabase db push --include-all
+      - name: Parar Supabase local
+        if: always()
+        run: supabase stop --no-backup
