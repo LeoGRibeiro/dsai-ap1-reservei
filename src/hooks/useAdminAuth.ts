@@ -1,42 +1,59 @@
 /**
- * Hook de autenticação mockada para o painel administrativo.
- * Usa LocalStorage como mecanismo de sessão front-end.
+ * Estado de autenticação do painel administrativo (Supabase Auth + is_admin()).
  *
- * BACKLOG: Substituir por autenticação real (JWT/OAuth) quando
- * houver backend. Ver BACKLOG.md.
+ * `autenticado` é `null` enquanto a sessão está sendo verificada.
+ *
+ * Spec: SPEC/2026-11-18-login-real-admin.md
  */
 
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import {
+  assinarSessaoAdmin,
+  entrarComoAdmin,
+  sairAdmin,
+  verificarSessaoAdmin,
+  type ResultadoLoginAdmin,
+} from "@/lib/supabase/adminAuthService";
 
-const STORAGE_KEY = "reservei_admin_auth";
-const SENHA_ADMIN = "admin123";
+/** Flag da autenticação simulada antiga (AP1), removida ao carregar. */
+const CHAVE_SESSAO_ANTIGA = "reservei_admin_auth";
 
 export function useAdminAuth() {
-  const [autenticado, setAutenticado] = useState<boolean | null>(null); // null = carregando
+  const [autenticado, setAutenticado] = useState<boolean | null>(null);
 
-  // Lê o estado do LocalStorage na montagem (client-only)
   useEffect(() => {
+    let ativo = true;
+
     try {
-      const flag = localStorage.getItem(STORAGE_KEY);
-      setAutenticado(flag === "true");
+      localStorage.removeItem(CHAVE_SESSAO_ANTIGA);
     } catch {
-      setAutenticado(false);
+      // localStorage indisponível (modo privado): nada a limpar.
     }
+
+    const verificar = async () => {
+      const ehAdmin = await verificarSessaoAdmin();
+      if (ativo) setAutenticado(ehAdmin);
+    };
+
+    void verificar();
+    const cancelar = assinarSessaoAdmin(() => void verificar());
+
+    return () => {
+      ativo = false;
+      cancelar();
+    };
   }, []);
 
-  const login = useCallback((senha: string): boolean => {
-    if (senha === SENHA_ADMIN) {
-      localStorage.setItem(STORAGE_KEY, "true");
-      setAutenticado(true);
-      return true;
-    }
-    return false;
+  const login = useCallback(async (email: string, senha: string): Promise<ResultadoLoginAdmin> => {
+    const resultado = await entrarComoAdmin(email, senha);
+    if (resultado.ok) setAutenticado(true);
+    return resultado;
   }, []);
 
-  const logout = useCallback(() => {
-    localStorage.removeItem(STORAGE_KEY);
+  const logout = useCallback(async () => {
+    await sairAdmin();
     setAutenticado(false);
   }, []);
 
