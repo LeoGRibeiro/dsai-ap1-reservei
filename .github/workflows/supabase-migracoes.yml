@@ -1,0 +1,60 @@
+# Validação das migrações do banco (Supabase)
+# Spec: SPEC/2026-11-17-pipeline-migracoes-supabase.md
+#
+# Sobe um Supabase local descartável (Docker) e aplica todas as migrações de
+# supabase/migrations do zero. Se alguma migração tiver erro, o job falha no PR,
+# antes do merge. Não usa credenciais e nunca toca o banco de produção.
+#
+# A aplicação em produção é feita pela integração GitHub do Supabase quando o PR
+# é integrado à main (Project Settings > Integrations > GitHub > Deploy to production).
+
+name: Migrações do Supabase
+
+on:
+  pull_request:
+    paths:
+      - "supabase/**"
+      - ".github/workflows/supabase-migracoes.yml"
+  push:
+    branches: [main]
+    paths:
+      - "supabase/**"
+      - ".github/workflows/supabase-migracoes.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      # Aplica todas as migrações num banco vazio. Storage e Realtime ficam ligados
+      # porque a migração base cria bucket, policies de storage e publicação Realtime.
+      - name: Subir Supabase local e aplicar migrações
+        run: supabase start -x studio,imgproxy,edge-runtime,logflare,vector,mailpit,supavisor,postgres-meta
+
+      - name: Conferir tabelas criadas
+        run: |
+          supabase migration list --local
+          psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -c "\dt public.*"
+
+      # As migrações precisam poder rodar de novo sem erro (a base já foi
+      # executada manualmente no banco novo antes do pipeline existir).
+      - name: Reexecutar migrações (idempotência)
+        run: |
+          for f in supabase/migrations/*.sql; do
+            echo "Reexecutando $f"
+            psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -q -f "$f"
+          done
+
+      - name: Parar Supabase local
+        if: always()
+        run: supabase stop --no-backup

@@ -100,7 +100,7 @@ reservei/
     │   ├── institucional/ # Repositórios e helpers de conteúdo institucional
     │   ├── landingPage/   # Configurações de seções e navegação
     │   ├── recorrencia/   # Algoritmos de contratos contínuos e ocorrências
-    │   ├── supabase/      # Clients Supabase, repositórios de dados e schema.sql
+    │   ├── supabase/      # Clients Supabase, repositórios de dados
     │   └── vagas/         # Regras de negócio de vagas compartilhadas
     └── store/             # Stores Zustand (autenticação, reservas, contratos)
 ```
