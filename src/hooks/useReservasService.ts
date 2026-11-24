@@ -37,6 +37,7 @@ import { isSupabaseConfigured } from "@/lib/supabase/client";
 import {
   listarUsuariosCadastrados,
   getTelefonesCadastradosLocal,
+  garantirSessaoVisitante,
 } from "@/lib/supabase/authService";
 import {
   construirBloqueio,
@@ -288,7 +289,11 @@ export function useReservasService() {
         observacoes: dados.observacoes,
       };
 
-      const gravacao = await gravarNoBanco(() => inserirReservaComResultado(reserva));
+      // Visitante sem conta recebe sessão anônima (dona da reserva nas regras de acesso).
+      const gravacao = await gravarNoBanco(async () => {
+        await garantirSessaoVisitante();
+        return inserirReservaComResultado(reserva);
+      });
       if (!gravacao.ok) return gravacao;
 
       adicionarReserva(reserva);

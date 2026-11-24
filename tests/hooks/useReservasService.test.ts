@@ -4,11 +4,12 @@ import type { Reserva } from "@/store/useReservasStore";
 
 // Spec: SPEC/2026-11-24-reserva-atomica.md
 
-const { servico, estado } = vi.hoisted(() => ({
+const { servico, estado, garantirSessaoVisitante } = vi.hoisted(() => ({
   servico: {
     inserirReservaComResultado: vi.fn(),
     atualizarReservaComResultado: vi.fn(),
   },
+  garantirSessaoVisitante: vi.fn(),
   estado: { configurado: true },
 }));
 
@@ -31,6 +32,7 @@ vi.mock("@/lib/supabase/reservasService", () => ({
 vi.mock("@/lib/supabase/authService", () => ({
   listarUsuariosCadastrados: vi.fn().mockResolvedValue([]),
   getTelefonesCadastradosLocal: () => new Map<string, string>(),
+  garantirSessaoVisitante,
 }));
 
 import { useReservasService } from "@/hooks/useReservasService";
@@ -103,6 +105,25 @@ describe("useReservasService: garantia de horário", () => {
 
       expect(resposta!).toEqual({ ok: false, erro: MENSAGENS_GRAVACAO_RESERVA.horario_ocupado });
       expect(useReservasStore.getState().reservas).toHaveLength(0);
+    });
+
+    it("cria a sessão de visitante antes de gravar a reserva", async () => {
+      const ordem: string[] = [];
+      garantirSessaoVisitante.mockImplementation(async () => {
+        ordem.push("sessao");
+        return true;
+      });
+      servico.inserirReservaComResultado.mockImplementation(async () => {
+        ordem.push("insert");
+        return { ok: true };
+      });
+      const { result } = renderHook(() => useReservasService());
+
+      await act(async () => {
+        await result.current.criarReservaEmProcessamento(dadosCriacao);
+      });
+
+      expect(ordem).toEqual(["sessao", "insert"]);
     });
 
     it("sem Supabase configurado, cria localmente", async () => {
