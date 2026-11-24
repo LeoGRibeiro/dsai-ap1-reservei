@@ -152,6 +152,12 @@ export function useReservasService() {
         },
         (idDeletado) => {
           useReservasStore.getState().removerReserva(idDeletado);
+        },
+        // Reserva de outra pessoa mudou: recarrega a grade (visão pública).
+        () => {
+          void fetchReservasSupabase().then((dados) => {
+            if (dados) useReservasStore.getState().setReservas(dados);
+          });
         }
       );
     }

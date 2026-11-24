@@ -1,5 +1,6 @@
 import { supabase, isSupabaseConfigured } from "./client";
 import { rowToReserva, reservaToRow, type ReservaDbRow } from "./types";
+import { mesclarPorId } from "@/lib/dados/mesclarPorId";
 import type { Reserva } from "@/store/useReservasStore";
 import {
   classificarErroGravacaoReserva,
@@ -7,9 +8,12 @@ import {
 } from "@/lib/reservas/garantiaHorario";
 
 const TABELA_RESERVAS = "reservas";
+const VISAO_RESERVAS_PUBLICAS = "reservas_publicas";
 
 /**
- * Busca todas as reservas cadastradas no Supabase.
+ * Busca as reservas visíveis para a sessão: completas as que a RLS libera
+ * (todas para o admin, as próprias para o cliente) e, para as demais, a visão
+ * pública `reservas_publicas`, sem dados pessoais, que alimenta a grade.
  */
 export async function fetchReservasSupabase(): Promise<Reserva[] | null> {
   if (!isSupabaseConfigured()) {
@@ -17,17 +21,19 @@ export async function fetchReservasSupabase(): Promise<Reserva[] | null> {
   }
 
   try {
-    const { data, error } = await supabase
-      .from(TABELA_RESERVAS)
-      .select("*")
-      .order("criada_em", { ascending: false });
+    const [completas, publicas] = await Promise.all([
+      supabase.from(TABELA_RESERVAS).select("*").order("criada_em", { ascending: false }),
+      supabase.from(VISAO_RESERVAS_PUBLICAS).select("*"),
+    ]);
 
-    if (error) {
-      console.error("[Supabase] Erro ao carregar reservas:", error.message);
-      return null;
-    }
+    if (completas.error) console.error("[Supabase] Erro ao carregar reservas:", completas.error.message);
+    if (publicas.error) console.error("[Supabase] Erro ao carregar a grade pública:", publicas.error.message);
+    if (completas.error && publicas.error) return null;
 
-    return (data as ReservaDbRow[]).map(rowToReserva);
+    return mesclarPorId(
+      ((completas.data ?? []) as ReservaDbRow[]).map(rowToReserva),
+      ((publicas.data ?? []) as ReservaDbRow[]).map(rowToReserva)
+    );
   } catch (err) {
     console.error("[Supabase] Falha inesperada ao buscar reservas:", err);
     return null;
@@ -259,12 +265,14 @@ export async function removerReservaSupabase(id: string): Promise<boolean> {
 
 /**
  * Cria uma inscrição Realtime para escutar inserções, atualizações e deleções
- * na tabela 'reservas' em tempo real.
+ * na tabela 'reservas' (só as linhas que a RLS libera para a sessão) e, para a
+ * grade pública, as mudanças em `reservas_horarios`, que não têm dados pessoais.
  */
 export function subscreverReservasSupabase(
   onInsert: (reserva: Reserva) => void,
   onUpdate: (reserva: Reserva) => void,
-  onDelete: (id: string) => void
+  onDelete: (id: string) => void,
+  onMudancaOcupacao?: () => void
 ) {
   if (!isSupabaseConfigured()) {
     return () => {};
@@ -322,6 +330,11 @@ export function subscreverReservasSupabase(
           onDelete(idDeletado);
         }
       }
+    )
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "reservas_horarios" },
+      () => onMudancaOcupacao?.()
     )
     .subscribe();
 

@@ -36,6 +36,7 @@ vi.mock("@/lib/supabase/authService", () => ({
 }));
 
 import { useReservasService } from "@/hooks/useReservasService";
+import { fetchReservasSupabase, subscreverReservasSupabase } from "@/lib/supabase/reservasService";
 import { useReservasStore } from "@/store/useReservasStore";
 import { MENSAGENS_GRAVACAO_RESERVA } from "@/lib/reservas/garantiaHorario";
 
@@ -217,6 +218,21 @@ describe("useReservasService: garantia de horário", () => {
 
       expect(result.current.getHorariosOcupados("2026-12-01", "q1")).toEqual(["11:00"]);
       expect(result.current.getHorariosOcupadosDia("2026-12-01")).toEqual([{ quadraId: "q1", horario: "11:00" }]);
+    });
+  });
+
+  describe("grade ao vivo com RLS", () => {
+    it("mudança nos horários ocupados recarrega a grade pela visão pública", async () => {
+      renderHook(() => useReservasService());
+      const aoMudarOcupacao = vi.mocked(subscreverReservasSupabase).mock.calls.at(-1)?.[3];
+      expect(aoMudarOcupacao).toBeTypeOf("function");
+
+      vi.mocked(fetchReservasSupabase).mockResolvedValueOnce([provisoria({ id: "de_outra_pessoa", nomeCliente: "" })]);
+      await act(async () => {
+        aoMudarOcupacao!();
+      });
+
+      expect(useReservasStore.getState().reservas.map((r) => r.id)).toEqual(["de_outra_pessoa"]);
     });
   });
 

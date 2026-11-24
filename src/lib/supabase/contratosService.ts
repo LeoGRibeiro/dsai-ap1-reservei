@@ -1,24 +1,30 @@
 import { supabase, isSupabaseConfigured } from "./client";
 import { rowToContrato, contratoToRow, type ContratoDbRow } from "@/lib/recorrencia/contratoMapper";
 import type { ContratoRecorrente } from "@/lib/recorrencia/types";
+import { mesclarPorId } from "@/lib/dados/mesclarPorId";
 
 const TABELA_CONTRATOS = "contratos_recorrentes";
+const VISAO_CONTRATOS_PUBLICOS = "contratos_publicos";
 
 /** Busca todos os contratos recorrentes. Retorna null se o Supabase não estiver disponível. */
 export async function fetchContratosSupabase(): Promise<ContratoRecorrente[] | null> {
   if (!isSupabaseConfigured()) return null;
 
   try {
-    const { data, error } = await supabase
-      .from(TABELA_CONTRATOS)
-      .select("*")
-      .order("criado_em", { ascending: false });
+    // Admin lê a tabela completa; os demais, a visão sem contato de grupos.
+    const [completos, publicos] = await Promise.all([
+      supabase.from(TABELA_CONTRATOS).select("*").order("criado_em", { ascending: false }),
+      supabase.from(VISAO_CONTRATOS_PUBLICOS).select("*"),
+    ]);
 
-    if (error) {
-      console.error("[Supabase] Erro ao carregar contratos:", error.message);
-      return null;
-    }
-    return (data as ContratoDbRow[]).map(rowToContrato);
+    if (completos.error) console.error("[Supabase] Erro ao carregar contratos:", completos.error.message);
+    if (publicos.error) console.error("[Supabase] Erro ao carregar contratos públicos:", publicos.error.message);
+    if (completos.error && publicos.error) return null;
+
+    return mesclarPorId(
+      ((completos.data ?? []) as ContratoDbRow[]).map(rowToContrato),
+      ((publicos.data ?? []) as ContratoDbRow[]).map(rowToContrato)
+    );
   } catch (err) {
     console.error("[Supabase] Falha inesperada ao buscar contratos:", err);
     return null;
