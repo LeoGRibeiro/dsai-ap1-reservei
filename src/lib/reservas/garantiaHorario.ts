@@ -12,13 +12,14 @@ import type { Reserva } from "@/store/useReservasStore";
 
 export const PRAZO_RESERVA_PROVISORIA_MINUTOS = 10;
 
-export type MotivoFalhaGravacao = "horario_ocupado" | "reserva_expirada" | "falha";
+export type MotivoFalhaGravacao = "horario_ocupado" | "reserva_expirada" | "usuario_bloqueado" | "falha";
 
 export type ResultadoGravacaoReserva = { ok: true } | { ok: false; motivo: MotivoFalhaGravacao };
 
 export const MENSAGENS_GRAVACAO_RESERVA: Record<MotivoFalhaGravacao, string> = {
   horario_ocupado: "Esse horário acabou de ser reservado por outra pessoa. Escolha outro horário.",
   reserva_expirada: "O tempo para concluir a reserva expirou. Escolha o horário novamente.",
+  usuario_bloqueado: "Sua conta está bloqueada para novas reservas. Fale com o complexo pelo WhatsApp.",
   falha: "Não foi possível salvar a reserva agora. Verifique sua conexão e tente novamente.",
 };
 
@@ -56,5 +57,6 @@ export function classificarErroGravacaoReserva(erro: unknown): MotivoFalhaGravac
 
   if (message.includes("horario_ocupado") || code === "23505") return "horario_ocupado";
   if (message.includes("reserva_expirada")) return "reserva_expirada";
+  if (message.includes("usuario_bloqueado")) return "usuario_bloqueado";
   return "falha";
 }

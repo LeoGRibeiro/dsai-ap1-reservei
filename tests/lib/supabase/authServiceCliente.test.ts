@@ -13,7 +13,7 @@ const { auth, rpc, perfil, estado } = vi.hoisted(() => ({
     signOut: vi.fn(),
   },
   rpc: vi.fn(),
-  perfil: { maybeSingle: vi.fn() },
+  perfil: { maybeSingle: vi.fn(), update: vi.fn() },
   estado: { configurado: true },
 }));
 
@@ -21,13 +21,18 @@ vi.mock("@/lib/supabase/client", () => ({
   supabase: {
     auth,
     rpc,
-    from: () => ({ select: () => ({ eq: () => perfil }) }),
+    from: () => ({
+      select: () => ({ eq: () => perfil }),
+      update: (dados: unknown) => ({ eq: () => perfil.update(dados) }),
+    }),
   },
   isSupabaseConfigured: () => estado.configurado,
 }));
 
 import {
+  atualizarPerfilSupabase,
   cadastrarUsuarioSupabase,
+  isTelefoneBloqueado,
   excluirContaSupabase,
   garantirSessaoVisitante,
   loginUsuarioSupabase,
@@ -191,6 +196,27 @@ describe("authService do cliente com Supabase Auth", () => {
     it("falha no banco devolve false", async () => {
       rpc.mockResolvedValue({ error: { message: "sem_sessao" } });
       await expect(excluirContaSupabase("uid-ana")).resolves.toBe(false);
+    });
+  });
+
+  describe("regras de acesso (RLS)", () => {
+    it("bloqueio consultado pela função do banco, sem ler o cadastro", async () => {
+      rpc.mockResolvedValue({ data: true, error: null });
+      await expect(isTelefoneBloqueado("(91) 90000-0003")).resolves.toBe(true);
+      expect(rpc).toHaveBeenCalledWith("telefone_bloqueado", { p_telefone: "91900000003" });
+    });
+
+    it("perfil recusado pelo banco não é dado como salvo", async () => {
+      perfil.update.mockResolvedValue({ error: { message: "alteracao_nao_permitida" } });
+      localStorage.setItem(CACHE, JSON.stringify({ id: "uid-ana", nome: "Ana", telefone: "(91) 99999-8888" }));
+      await expect(atualizarPerfilSupabase("uid-ana", { nome: "Ana" })).resolves.toBeNull();
+    });
+
+    it("perfil aceito pelo banco é devolvido atualizado", async () => {
+      perfil.update.mockResolvedValue({ error: null });
+      localStorage.setItem(CACHE, JSON.stringify({ id: "uid-ana", nome: "Ana", telefone: "(91) 99999-8888" }));
+      const atualizado = await atualizarPerfilSupabase("uid-ana", { nome: "Ana Souza" });
+      expect(atualizado?.nome).toBe("Ana Souza");
     });
   });
 

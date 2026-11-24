@@ -240,10 +240,10 @@ export async function atualizarPerfilSupabase(
 ): Promise<UserProfile | null> {
   const digits = dados.telefone ? dados.telefone.replace(/\D/g, "") : undefined;
 
-  // Atualiza no Supabase
+  // Atualiza no Supabase; se o banco recusar (ex.: regra de acesso), não salva nada.
   if (isSupabaseConfigured()) {
     try {
-      await supabase
+      const { error } = await supabase
         .from("usuarios")
         .update({
           ...(dados.nome ? { nome: dados.nome } : {}),
@@ -253,8 +253,13 @@ export async function atualizarPerfilSupabase(
           ...(dados.motivo_bloqueio !== undefined ? { motivo_bloqueio: dados.motivo_bloqueio } : {}),
         })
         .eq("id", userId);
+      if (error) {
+        console.warn("[Auth] Perfil não atualizado no Supabase:", error.message);
+        return null;
+      }
     } catch (err) {
       console.warn("[Auth] Erro ao atualizar no Supabase:", err);
+      return null;
     }
   }
 
@@ -514,18 +519,11 @@ export async function isTelefoneBloqueado(telefone: string): Promise<boolean> {
   const digits = telefone.replace(/\D/g, "");
   if (!digits || digits.length < 8) return false;
 
-  // 1. Tenta checar diretamente no Supabase em tempo real
+  // 1. Função do banco: responde só sim ou não, sem expor o cadastro (RLS).
   if (isSupabaseConfigured()) {
     try {
-      const { data, error } = await supabase
-        .from("usuarios")
-        .select("bloqueado")
-        .eq("telefone", digits)
-        .maybeSingle();
-
-      if (!error && data && data.bloqueado !== undefined && data.bloqueado !== null) {
-        return Boolean(data.bloqueado);
-      }
+      const { data, error } = await supabase.rpc("telefone_bloqueado", { p_telefone: digits });
+      if (!error && typeof data === "boolean") return data;
     } catch {}
   }
 

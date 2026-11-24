@@ -97,6 +97,11 @@ describe("classificarErroGravacaoReserva", () => {
     expect(classificarErroGravacaoReserva({ code: "P0001", message: "reserva_expirada" })).toBe("reserva_expirada");
   });
 
+  it("reconhece cliente bloqueado", () => {
+    expect(classificarErroGravacaoReserva({ code: "P0001", message: "usuario_bloqueado" })).toBe("usuario_bloqueado");
+    expect(MENSAGENS_GRAVACAO_RESERVA.usuario_bloqueado).toMatch(/bloqueada/);
+  });
+
   it("qualquer outro erro é falha genérica", () => {
     expect(classificarErroGravacaoReserva({ message: "Failed to fetch" })).toBe("falha");
     expect(classificarErroGravacaoReserva(null)).toBe("falha");

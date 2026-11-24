@@ -9,7 +9,6 @@ import { useReservasService } from "@/hooks/useReservasService";
 import {
   formatarDataExibicao,
   formatarMoeda,
-  mascaraWhatsApp,
   getHoje,
   TELEFONE_COMPLEXO,
   NOME_COMPLEXO,
@@ -106,7 +105,6 @@ export default function MinhaContaPage() {
     setSalvandoPerfil(true);
     const ok = await atualizarPerfil({
       nome: nomeEdit.trim(),
-      telefone: telefoneEdit,
       dataNascimento: dataNascimentoEdit || null,
     });
     setSalvandoPerfil(false);
@@ -642,9 +640,13 @@ export default function MinhaContaPage() {
                     <Label className="text-xs text-slate-300">WhatsApp</Label>
                     <Input
                       value={telefoneEdit}
-                      onChange={(e) => setTelefoneEdit(mascaraWhatsApp(e.target.value))}
-                      className="bg-slate-800 border-slate-700 h-10 rounded-xl text-white"
+                      readOnly
+                      aria-describedby="ajuda-whatsapp-login"
+                      className="bg-slate-800 border-slate-700 h-10 rounded-xl text-slate-400"
                     />
+                    <p id="ajuda-whatsapp-login" className="text-[11px] text-slate-500">
+                      O WhatsApp é o seu login. Para trocar, fale com o complexo.
+                    </p>
                   </div>
 
                   <div className="space-y-1.5">
