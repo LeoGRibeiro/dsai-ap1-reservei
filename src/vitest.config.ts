@@ -20,6 +20,8 @@ export default defineConfig({
       '@': path.resolve(__dirname, './'),
       'react': path.resolve(__dirname, './node_modules/react'),
       '@testing-library/react': path.resolve(__dirname, './node_modules/@testing-library/react'),
+      // Os testes ficam fora de src/: sem o alias, vi.mock("sonner") não substitui o pacote usado pelos componentes.
+      'sonner': path.resolve(__dirname, './node_modules/sonner'),
     },
     include: ['../tests/**/*.{test,spec}.{ts,tsx}'],
     // Spec: SPEC/2026-11-17-fundacao-qualidade.md
