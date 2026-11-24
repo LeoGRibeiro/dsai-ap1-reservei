@@ -55,6 +55,14 @@ jobs:
             psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -q -f "$f"
           done
 
+      # Testes de regras do banco (cada arquivo roda numa transação desfeita).
+      - name: Testes SQL
+        run: |
+          for f in supabase/tests/*.sql; do
+            echo "Rodando $f"
+            psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -q -f "$f"
+          done
+
       - name: Parar Supabase local
         if: always()
         run: supabase stop --no-backup
