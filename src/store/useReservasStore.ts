@@ -57,6 +57,8 @@ export interface Reserva {
   status: StatusReserva;
   statusWhatsApp: StatusWhatsApp;
   criadaEm: string; // ISO datetime
+  /** Prazo da reserva provisória, definido pelo banco (somente leitura). */
+  expiraEm?: string | null;
 
   // Opcionais
   esporte?: Esporte;

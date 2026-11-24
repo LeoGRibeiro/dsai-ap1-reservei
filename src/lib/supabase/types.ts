@@ -42,6 +42,7 @@ export interface ReservaDbRow {
   statusWhatsApp?: string;
   criada_em?: string;
   criadaEm?: string;
+  expira_em?: string | null;
   esporte?: string | null;
   observacoes?: string | null;
   contrato_id?: string | null;
@@ -152,6 +153,7 @@ export function rowToReserva(row: ReservaDbRow): Reserva {
     status: (row.status as StatusReserva) || "em_processamento",
     statusWhatsApp: (row.status_whatsapp ?? row.statusWhatsApp ?? "nao_enviado") as StatusWhatsApp,
     criadaEm: row.criada_em ?? row.criadaEm ?? new Date().toISOString(),
+    expiraEm: row.expira_em ?? undefined,
     esporte: (row.esporte as Esporte) || undefined,
     observacoes: row.observacoes || undefined,
     contratoId: row.contrato_id || undefined,
