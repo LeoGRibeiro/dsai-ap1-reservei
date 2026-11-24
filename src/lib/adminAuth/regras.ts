@@ -5,6 +5,8 @@
  * Spec: SPEC/2026-11-18-login-real-admin.md
  */
 
+import { classificarErroAuth } from "@/lib/auth/classificarErroAuth";
+
 export const MENSAGENS_LOGIN_ADMIN = {
   emailObrigatorio: "Informe o e-mail de acesso.",
   emailInvalido: "Informe um e-mail válido.",
@@ -32,32 +34,20 @@ export function validarCredenciaisAdmin(email: string, senha: string): string | 
   return null;
 }
 
-interface ErroAuth {
-  name?: string;
-  message?: string;
-  status?: number;
-  code?: string;
-}
-
 /**
  * Converte um erro do Supabase Auth (ou de rede) em mensagem para o usuário.
  * Credenciais erradas e e-mail não confirmado recebem a mesma mensagem, para
  * não revelar quais e-mails têm conta.
  */
 export function traduzirErroLoginAdmin(erro: unknown): string {
-  if (!erro || typeof erro !== "object") return MENSAGENS_LOGIN_ADMIN.erroGenerico;
-
-  const { name = "", message = "", status, code = "" } = erro as ErroAuth;
-  const texto = `${code} ${message}`.toLowerCase();
-
-  if (code === "invalid_credentials" || code === "email_not_confirmed" || texto.includes("invalid login credentials") || texto.includes("email not confirmed")) {
-    return MENSAGENS_LOGIN_ADMIN.credenciaisInvalidas;
+  switch (classificarErroAuth(erro)) {
+    case "credenciais":
+      return MENSAGENS_LOGIN_ADMIN.credenciaisInvalidas;
+    case "muitas_tentativas":
+      return MENSAGENS_LOGIN_ADMIN.muitasTentativas;
+    case "conexao":
+      return MENSAGENS_LOGIN_ADMIN.falhaConexao;
+    default:
+      return MENSAGENS_LOGIN_ADMIN.erroGenerico;
   }
-  if (status === 429 || texto.includes("rate limit")) {
-    return MENSAGENS_LOGIN_ADMIN.muitasTentativas;
-  }
-  if (name === "AuthRetryableFetchError" || status === 0 || texto.includes("failed to fetch") || texto.includes("network")) {
-    return MENSAGENS_LOGIN_ADMIN.falhaConexao;
-  }
-  return MENSAGENS_LOGIN_ADMIN.erroGenerico;
 }
