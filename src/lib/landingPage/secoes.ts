@@ -18,6 +18,7 @@ export const SPECS_LANDING_PAGE = {
   CONTEUDO_INSTITUCIONAL: "SPEC/2026-10-06-lp-conteudo-institucional.md",
   PROVA_SOCIAL_REDES: "SPEC/2026-10-06-lp-prova-social-redes.md",
   EVENTOS_FIDELIDADE: "SPEC/2026-10-06-lp-eventos-fidelidade.md",
+  EVENTOS_TORNEIOS: "SPEC/2026-11-27-eventos-e-torneios.md",
   SUPORTE_CONTATO: "SPEC/2026-10-06-lp-suporte-contato.md",
 } as const;
 
@@ -86,7 +87,7 @@ export const SECOES_LANDING_PAGE: readonly SecaoLandingPage[] = [
     titulo: "Campeonatos e Eventos",
     subtitulo: "Torneios, ligas e eventos sociais que movimentam o complexo.",
     exibirNoMenu: true,
-    specReferencia: SPECS_LANDING_PAGE.EVENTOS_FIDELIDADE,
+    specReferencia: SPECS_LANDING_PAGE.EVENTOS_TORNEIOS,
   },
   {
     id: SECAO_IDS.AVALIACOES,
@@ -136,14 +137,6 @@ export const PLACEHOLDERS_SECOES: readonly PlaceholderSecao[] = [
       "Passo a passo de \"Como Funciona\" o acúmulo de pontos",
       "Exemplos de recompensas reais disponíveis",
       "CTA \"Crie sua Conta e Comece a Pontuar\"",
-    ],
-  },
-  {
-    secaoId: SECAO_IDS.EVENTOS,
-    itensPlanejados: [
-      "Cards de torneios, ligas e eventos sociais",
-      "Data, horário, valor de inscrição e regras",
-      "Cadastro de eventos e banners pelo Painel Admin",
     ],
   },
   {
