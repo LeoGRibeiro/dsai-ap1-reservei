@@ -11,11 +11,15 @@ export const PERCENTUAL_SINAL = 0.4;
 /** Horas mínimas de antecedência para cancelamento sem cobrança */
 export const TOLERANCIA_CANCELAMENTO_HORAS = 24;
 
-/** Tabela de preços por faixa de horário (R$/hora) */
+/**
+ * Tabela de preços por faixa de horário (R$/hora), pelo horário de início do bloco.
+ * Os mesmos valores estão em `mcp_server/reservei_mcp/precos.py` e na função
+ * `valor_hora_quadra` do banco; a fixture `tests/fixtures/regras-preco.json` confere os três.
+ */
 export const PRECOS = {
-  MANHA: 70, // 08:00 – 11:59
-  TARDE: 90, // 12:00 – 16:59
-  NOITE: 110, // 17:00 – 21:59
+  MANHA: 70, // blocos das 08:00 às 11:00
+  TARDE: 90, // blocos das 12:00 às 17:00
+  NOITE: 110, // blocos das 18:00 às 21:00
 } as const;
 
 // ─── Agendamento ──────────────────────────────────────────────────────────────
@@ -32,14 +36,18 @@ export const TELEFONE_COMPLEXO = "(11) 99999-0000";
 // ─── Funções Utilitárias ──────────────────────────────────────────────────────
 
 /**
- * Retorna o valor (R$) cobrado por hora de acordo com o horário de início.
- * Regra: manhã (08-11h) R$70 | tarde (12-16h) R$90 | noite (17-22h) R$110
+ * Retorna o valor (R$) cobrado pelo bloco de 1 hora que começa em `horaInicio`.
+ * Regra: manhã (blocos 08h-11h) R$70 | tarde (12h-17h) R$90 | noite (18h-21h) R$110.
+ *
+ * @throws {RangeError} quando o horário não está no formato "HH:00" ou fica fora
+ *   do funcionamento (08:00 a 21:00), como o erro `horario_invalido` do banco.
  */
 export function calcularValorHora(horaInicio: string): number {
-  const hora = parseInt(horaInicio.split(":")[0], 10);
+  const hora = /^\d{2}:00$/.test(horaInicio) ? parseInt(horaInicio.slice(0, 2), 10) : NaN;
   if (hora >= 8 && hora < 12) return PRECOS.MANHA;
   if (hora >= 12 && hora < 18) return PRECOS.TARDE;
-  return PRECOS.NOITE;
+  if (hora >= 18 && hora < 22) return PRECOS.NOITE;
+  throw new RangeError(`Horário fora da grade de funcionamento: "${horaInicio}"`);
 }
 
 /** Soma os valores de cada slot horário selecionado */
