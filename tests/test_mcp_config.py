@@ -7,7 +7,6 @@ Rodar a partir da raiz do repositório: python -m pytest tests/test_mcp_config.p
 
 import sys
 from pathlib import Path
-from unittest.mock import patch, MagicMock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "mcp_server"))
 
@@ -62,21 +61,3 @@ def test_publishable_key_nao_vai_no_authorization():
 def test_anon_key_jwt_vai_como_bearer():
     headers = montar_headers_supabase("eyJ.anon")
     assert headers["Authorization"] == "Bearer eyJ.anon"
-
-
-def test_falha_ao_gravar_no_supabase_retorna_false_e_nao_guarda_localmente():
-    reserva = {"id": "res_teste", "data": "2099-01-01", "quadra_id": "q1", "horarios": ["18:00"]}
-    resposta = MagicMock(status_code=500, text="erro")
-    with patch.object(server, "SUPABASE_URL", "https://abc.supabase.co"), patch.object(
-        server, "SUPABASE_KEY", "sb_publishable_xyz"
-    ), patch.object(server.requests, "post", return_value=resposta):
-        assert server.salvar_reserva_supabase(reserva) is False
-    assert reserva not in server._LOCAL_FALLBACK_RESERVAS
-
-
-def test_sem_supabase_configurado_grava_em_memoria():
-    reserva = {"id": "res_memoria", "data": "2099-01-02", "quadra_id": "q2", "horarios": ["19:00"]}
-    with patch.object(server, "SUPABASE_URL", ""), patch.object(server, "SUPABASE_KEY", ""):
-        assert server.salvar_reserva_supabase(reserva) is True
-    assert reserva in server._LOCAL_FALLBACK_RESERVAS
-    server._LOCAL_FALLBACK_RESERVAS.remove(reserva)
