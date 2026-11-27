@@ -390,7 +390,7 @@ export async function excluirEscolinha(id: string): Promise<boolean> {
  */
 export async function uploadImagemInstitucional(
   arquivo: File,
-  pasta: "galeria" | "professores" = "galeria"
+  pasta: "galeria" | "professores" | "eventos" = "galeria"
 ): Promise<{ success: boolean; url?: string; error?: string }> {
   if (!isSupabaseConfigured()) {
     // Retorna URL de objeto temporário em memória para demonstração offline

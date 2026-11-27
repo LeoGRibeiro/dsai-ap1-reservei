@@ -48,7 +48,7 @@ describe("LandingSecoesPlaceholder - Componente", () => {
 
   it("referencia a spec responsável em cada placeholder", () => {
     render(<LandingSecoesPlaceholder />);
-    const card = screen.getByTestId("placeholder-eventos");
+    const card = screen.getByTestId("placeholder-fidelidade");
     expect(card).toHaveAttribute("data-spec", "SPEC/2026-10-06-lp-eventos-fidelidade.md");
   });
 
@@ -73,5 +73,15 @@ describe("CabecalhoReserva - Componente", () => {
     const h1 = screen.getByRole("heading", { level: 1 });
     expect(h1).toHaveTextContent("Agende sua quadra agora");
     expect(h1).toHaveAttribute("id", ID_TITULO_RESERVA);
+  });
+
+  it("renderiza a seção já implementada na posição do menu, no lugar do placeholder", () => {
+    const { container } = render(
+      <LandingSecoesPlaceholder implementadas={{ eventos: <section id="eventos">Eventos reais</section> }} />
+    );
+    const ids = Array.from(container.querySelectorAll("section")).map((s) => s.id);
+    expect(ids.indexOf("eventos")).toBe(ids.indexOf("fidelidade") + 1);
+    expect(screen.getByText("Eventos reais")).toBeInTheDocument();
+    expect(screen.queryByTestId("placeholder-eventos")).toBeNull();
   });
 });

@@ -1,4 +1,4 @@
-import type { ComponentType } from "react";
+import { Fragment, type ComponentType, type ReactNode } from "react";
 import {
   CalendarCheck,
   Camera,
@@ -34,6 +34,8 @@ export interface LandingSecoesPlaceholderProps {
   secoes?: readonly SecaoLandingPage[];
   /** Placeholders disponíveis (injeção para testes). */
   placeholders?: readonly PlaceholderSecao[];
+  /** Seções já implementadas, renderizadas na posição do catálogo no lugar do placeholder. */
+  implementadas?: Partial<Record<SecaoLandingId, ReactNode>>;
 }
 
 /**
@@ -49,26 +51,32 @@ export interface LandingSecoesPlaceholderProps {
 export function LandingSecoesPlaceholder({
   secoes = SECOES_LANDING_PAGE,
   placeholders = PLACEHOLDERS_SECOES,
+  implementadas = {},
 }: LandingSecoesPlaceholderProps) {
   const itens = secoes
     .filter((secao) => secao.id !== SECAO_IDS.INICIO)
-    .map((secao) => ({ secao, placeholder: getPlaceholderDaSecao(secao.id, placeholders) }))
-    .filter(
-      (item): item is { secao: SecaoLandingPage; placeholder: PlaceholderSecao } =>
-        item.placeholder !== null
-    );
+    .map((secao) => ({
+      secao,
+      real: implementadas[secao.id],
+      placeholder: getPlaceholderDaSecao(secao.id, placeholders),
+    }))
+    .filter((item) => item.real !== undefined || item.placeholder !== null);
 
   return (
     <>
-      {itens.map(({ secao, placeholder }, indice) => (
-        <SecaoPlaceholder
-          key={secao.id}
-          secao={secao}
-          placeholder={placeholder}
-          icone={ICONES_SECOES[secao.id]}
-          destaque={indice % 2 === 0}
-        />
-      ))}
+      {itens.map(({ secao, real, placeholder }, indice) =>
+        real !== undefined ? (
+          <Fragment key={secao.id}>{real}</Fragment>
+        ) : (
+          <SecaoPlaceholder
+            key={secao.id}
+            secao={secao}
+            placeholder={placeholder as PlaceholderSecao}
+            icone={ICONES_SECOES[secao.id]}
+            destaque={indice % 2 === 0}
+          />
+        )
+      )}
     </>
   );
 }
