@@ -66,6 +66,16 @@ export default function MinhaContaPage() {
   const [reservaParaCancelar, setReservaParaCancelar] = useState<Reserva | null>(null);
   const [cancelandoReserva, setCancelandoReserva] = useState(false);
 
+  /** A página pode ter ficado aberta até passar do prazo: avalia de novo antes de abrir o modal. */
+  const abrirModalCancelamento = (reserva: Reserva) => {
+    const avaliacao = avaliarCancelamentoOnline(reserva, new Date());
+    if (avaliacao.permitido) {
+      setReservaParaCancelar(reserva);
+    } else {
+      toast.error(avaliacao.motivo ?? "Não é possível cancelar esta reserva pelo site.");
+    }
+  };
+
   const handleConfirmarCancelamento = async () => {
     if (!reservaParaCancelar) return;
     // O modal pode ter ficado aberto até passar do prazo de 24h: avalia de novo agora.
@@ -420,7 +430,12 @@ export default function MinhaContaPage() {
                             </div>
                             <div className="flex items-center gap-2 shrink-0">
                               <a
-                                href={`https://wa.me/${TELEFONE_COMPLEXO.replace(/\D/g, "")}?text=Olá,%20tenho%20uma%20dúvida%20sobre%20minha%20reserva%20no%20dia%20${reserva.data}%20(Quadra%20${quadra?.numero})`}
+                                href={
+                                  montarLinkWhatsApp(
+                                    TELEFONE_COMPLEXO,
+                                    `Olá, tenho uma dúvida sobre minha reserva no dia ${reserva.data} (Quadra ${quadra?.numero})`
+                                  ) ?? undefined
+                                }
                                 target="_blank"
                                 rel="noreferrer"
                                 className="text-[11px] text-slate-400 hover:text-emerald-400 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-800/80 hover:bg-slate-800 border border-slate-700/60 transition-colors"
@@ -521,7 +536,7 @@ export default function MinhaContaPage() {
                             <Button
                               size="sm"
                               variant="ghost"
-                              onClick={() => setReservaParaCancelar(reserva)}
+                              onClick={() => abrirModalCancelamento(reserva)}
                               className="bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 border border-red-500/25 hover:border-red-500/40 rounded-xl font-bold text-xs h-8 px-3.5 flex items-center gap-1.5 transition-colors shadow-sm"
                             >
                               <Trash2 className="w-3.5 h-3.5" />

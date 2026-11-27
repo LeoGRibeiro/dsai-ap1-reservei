@@ -64,6 +64,17 @@ describe("avaliarCancelamentoOnline", () => {
     expect(r.motivo).toMatch(/contrato recorrente/);
   });
 
+  it("explica a regra do contrato mesmo quando faltam menos de 24 horas", () => {
+    const r = avaliarCancelamentoOnline({ ...reserva, contratoId: "ctr_1" }, agoraLocal(20, 12));
+    expect(r.motivo).toMatch(/contrato recorrente/);
+  });
+
+  it("nega na dúvida quando o horário gravado não pode ser lido", () => {
+    const r = avaliarCancelamentoOnline({ ...reserva, horaInicio: "18h" }, agoraLocal(1, 8));
+    expect(r.permitido).toBe(false);
+    expect(r.motivo).toMatch(/Não foi possível verificar o horário/);
+  });
+
   it("devolve o motivo da primeira regra que se aplica", () => {
     const r = avaliarCancelamentoOnline(
       { ...reserva, status: "cancelada", contratoId: "ctr_1" },

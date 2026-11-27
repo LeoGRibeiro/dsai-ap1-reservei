@@ -3,7 +3,7 @@
  * Spec: SPEC/2026-11-27-cancelamento-24h-cliente.md
  */
 import React from "react";
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { toast } from "sonner";
 import MinhaContaPage from "@/app/minha-conta/page";
@@ -59,7 +59,7 @@ describe("Minha Conta - cancelamento com 24 horas de antecedência", () => {
   beforeEach(() => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(AGORA);
-    cancelarReserva.mockReset();
+    vi.clearAllMocks();
   });
 
   afterEach(() => {
@@ -77,7 +77,7 @@ describe("Minha Conta - cancelamento com 24 horas de antecedência", () => {
     expect(decodeURIComponent(link.getAttribute("href") ?? "")).toContain("20/11/2026 às 09:00");
   });
 
-  it("mostra o botão para reserva com mais de 24 horas e a política no modal", () => {
+  it("mostra o botão para reserva com mais de 24 horas e a política no modal", async () => {
     reservasMock = [reserva("longe0001", "2026-11-20", "11:00")]; // 25h depois
     render(<MinhaContaPage />);
 
@@ -87,6 +87,28 @@ describe("Minha Conta - cancelamento com 24 horas de antecedência", () => {
     expect(within(modal).getByText(/até 24 horas antes do início/)).toBeInTheDocument();
     fireEvent.click(within(modal).getByRole("button", { name: /Confirmar Cancelamento/ }));
     expect(cancelarReserva).toHaveBeenCalledWith("longe0001");
+    await waitFor(() => expect(toast.success).toHaveBeenCalled());
+  });
+
+  it("não abre o modal se o prazo passou enquanto a página estava aberta", () => {
+    reservasMock = [reserva("limite002", "2026-11-20", "10:30")]; // 24h30 depois
+    render(<MinhaContaPage />);
+
+    vi.setSystemTime(new Date(2026, 10, 19, 11, 0, 0)); // agora faltam 23h30
+    fireEvent.click(screen.getByRole("button", { name: /Cancelar Reserva/ }));
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(toast.error).toHaveBeenCalledWith(expect.stringMatching(/24 horas/));
+  });
+
+  it("monta o link de suporte do card com a mensagem codificada", () => {
+    reservasMock = [reserva("suporte01", "2026-11-25", "18:00")];
+    render(<MinhaContaPage />);
+
+    const href = screen.getByTitle("Falar com o suporte no WhatsApp").getAttribute("href") ?? "";
+    expect(href).toMatch(/^https:\/\/wa\.me\/\d+\?text=/);
+    expect(href).not.toMatch(/[\sú]/);
+    expect(decodeURIComponent(href)).toContain("dúvida sobre minha reserva no dia 2026-11-25");
   });
 
   it("revalida na confirmação e não cancela se o prazo passou com o modal aberto", () => {

@@ -29,6 +29,10 @@ function motivoBloqueio(reserva: Reserva, horasRestantes: number): string | unde
   if (reserva.contratoId) {
     return "Reservas de contrato recorrente (escolinhas e grupos) são canceladas pelo complexo.";
   }
+  // Horário gravado ilegível ("18h", ""): na dúvida, não libera o cancelamento.
+  if (!Number.isFinite(horasRestantes)) {
+    return "Não foi possível verificar o horário desta reserva. Fale com o complexo pelo WhatsApp.";
+  }
   if (horasRestantes <= 0) return "Esta reserva já começou ou já passou.";
   if (horasRestantes < TOLERANCIA_CANCELAMENTO_HORAS) {
     return `Cancelamento pelo site só com pelo menos ${TOLERANCIA_CANCELAMENTO_HORAS} horas de antecedência. Fale com o complexo pelo WhatsApp.`;
