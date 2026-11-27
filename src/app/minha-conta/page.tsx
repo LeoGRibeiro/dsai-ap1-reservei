@@ -14,6 +14,12 @@ import {
   NOME_COMPLEXO,
 } from "@/lib/constants";
 import { QUADRAS } from "@/lib/quadras";
+import {
+  avaliarCancelamentoOnline,
+  mensagemCancelamentoWhatsApp,
+  textoPoliticaCancelamento,
+} from "@/lib/cancelamentoCliente/politicaCancelamento";
+import { montarLinkWhatsApp } from "@/lib/landingPage/navegacao";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -62,6 +68,13 @@ export default function MinhaContaPage() {
 
   const handleConfirmarCancelamento = async () => {
     if (!reservaParaCancelar) return;
+    // O modal pode ter ficado aberto até passar do prazo de 24h: avalia de novo agora.
+    const avaliacao = avaliarCancelamentoOnline(reservaParaCancelar, new Date());
+    if (!avaliacao.permitido) {
+      toast.error(avaliacao.motivo ?? "Não é possível cancelar esta reserva pelo site.");
+      setReservaParaCancelar(null);
+      return;
+    }
     setCancelandoReserva(true);
     try {
       await cancelarReserva(reservaParaCancelar.id);
@@ -385,6 +398,10 @@ export default function MinhaContaPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {proximasReservas.map((reserva) => {
                     const quadra = QUADRAS.find((q) => q.id === reserva.quadraId);
+                    const cancelamento = avaliarCancelamentoOnline(reserva, new Date());
+                    const linkSuporteCancelamento = cancelamento.permitido
+                      ? null
+                      : montarLinkWhatsApp(TELEFONE_COMPLEXO, mensagemCancelamentoWhatsApp(reserva));
                     return (
                       <div
                         key={reserva.id}
@@ -500,16 +517,33 @@ export default function MinhaContaPage() {
                             Código: <span className="font-mono text-slate-400">#{reserva.id.slice(0, 8)}</span>
                           </span>
 
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => setReservaParaCancelar(reserva)}
-                            className="bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 border border-red-500/25 hover:border-red-500/40 rounded-xl font-bold text-xs h-8 px-3.5 flex items-center gap-1.5 transition-colors shadow-sm"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                            Cancelar Reserva
-                          </Button>
+                          {cancelamento.permitido ? (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => setReservaParaCancelar(reserva)}
+                              className="bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 border border-red-500/25 hover:border-red-500/40 rounded-xl font-bold text-xs h-8 px-3.5 flex items-center gap-1.5 transition-colors shadow-sm"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              Cancelar Reserva
+                            </Button>
+                          ) : (
+                            linkSuporteCancelamento && (
+                              <a
+                                href={linkSuporteCancelamento}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-[11px] font-semibold text-emerald-400 hover:text-emerald-300 flex items-center gap-1.5"
+                              >
+                                <MessageCircle className="w-3.5 h-3.5" />
+                                Falar com o complexo
+                              </a>
+                            )
+                          )}
                         </div>
+                        {!cancelamento.permitido && (
+                          <p className="mt-2 text-[11px] text-slate-500">{cancelamento.motivo}</p>
+                        )}
                       </div>
                     );
                   })}
@@ -810,6 +844,7 @@ export default function MinhaContaPage() {
             </DialogTitle>
             <DialogDescription className="text-slate-400 text-xs mt-2">
               Tem certeza que deseja cancelar esta reserva? Esta ação liberará a quadra e o horário no sistema para outros clientes.
+              <span className="block mt-2 text-xs text-amber-300/90">{textoPoliticaCancelamento()}</span>
             </DialogDescription>
           </DialogHeader>
 

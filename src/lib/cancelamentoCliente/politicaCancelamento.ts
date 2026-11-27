@@ -49,6 +49,12 @@ export function avaliarCancelamentoOnline(reserva: Reserva, agora: Date): Avalia
   return motivo ? { permitido: false, motivo, horasRestantes } : { permitido: true, horasRestantes };
 }
 
+/** Mensagem para o WhatsApp do complexo quando o cancelamento pelo site não é permitido. */
+export function mensagemCancelamentoWhatsApp(reserva: Pick<Reserva, "data" | "horaInicio">): string {
+  const [ano, mes, dia] = reserva.data.split("-");
+  return `Olá! Preciso de ajuda para cancelar minha reserva de ${dia}/${mes}/${ano} às ${reserva.horaInicio}.`;
+}
+
 export function textoPoliticaCancelamento(): string {
   return (
     `O cancelamento pelo site é permitido até ${TOLERANCIA_CANCELAMENTO_HORAS} horas antes do início da reserva. ` +
