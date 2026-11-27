@@ -5,7 +5,8 @@
  * Spec: SPEC/2026-11-27-eventos-e-torneios.md
  */
 
-import { supabase, isSupabaseConfigured } from "./client";
+import { supabase } from "./client";
+import { criarConsultaSegura } from "./consultaSegura";
 import { MENSAGENS_EVENTOS, traduzirErroEvento } from "@/lib/eventos/regras";
 import type {
   Evento,
@@ -145,46 +146,11 @@ function partidaParaLinha(p: PartidaEvento): PartidaRow {
   };
 }
 
-const NAO_CONFIGURADO = { ok: false as const, erro: MENSAGENS_EVENTOS.erroGenerico };
-
-/** Executa uma consulta e devolve lista vazia em caso de erro (a tela não quebra). */
-async function listar<R, T>(
-  consulta: () => PromiseLike<{ data: R[] | null; error: { message: string } | null }>,
-  mapear: (row: R) => T,
-  contexto: string
-): Promise<T[]> {
-  if (!isSupabaseConfigured()) return [];
-  try {
-    const { data, error } = await consulta();
-    if (error) {
-      console.error(`[Eventos] Erro ao carregar ${contexto}:`, error.message);
-      return [];
-    }
-    return (data ?? []).map(mapear);
-  } catch (err) {
-    console.error(`[Eventos] Falha ao carregar ${contexto}:`, err);
-    return [];
-  }
-}
-
-/** Executa uma gravação e traduz o erro do banco. */
-async function gravar(
-  operacao: () => PromiseLike<{ error: { message: string } | null }>,
-  contexto: string
-): Promise<ResultadoEventos> {
-  if (!isSupabaseConfigured()) return NAO_CONFIGURADO;
-  try {
-    const { error } = await operacao();
-    if (error) {
-      console.error(`[Eventos] Erro ao ${contexto}:`, error.message);
-      return { ok: false, erro: traduzirErroEvento(error) };
-    }
-    return { ok: true, dado: undefined };
-  } catch (err) {
-    console.error(`[Eventos] Falha ao ${contexto}:`, err);
-    return { ok: false, erro: MENSAGENS_EVENTOS.erroGenerico };
-  }
-}
+const { listar, gravar } = criarConsultaSegura({
+  modulo: "Eventos",
+  traduzir: traduzirErroEvento,
+  erroGenerico: MENSAGENS_EVENTOS.erroGenerico,
+});
 
 export function listarEventos(): Promise<Evento[]> {
   return listar<EventoRow, Evento>(
