@@ -60,8 +60,16 @@ export function useEventosAdmin() {
   }, []);
 
   useEffect(() => {
-    void recarregar();
-  }, [recarregar]);
+    let ativo = true;
+    void listarEventos().then((lista) => {
+      if (!ativo) return;
+      setEventos(lista);
+      setCarregando(false);
+    });
+    return () => {
+      ativo = false;
+    };
+  }, []);
 
   /** Cria ou edita um evento em rascunho. */
   const salvarRascunho = useCallback(
@@ -194,23 +202,34 @@ export function useEventoPublico(eventoId: string) {
   const [partidas, setPartidas] = useState<PartidaEvento[]>([]);
   const [carregando, setCarregando] = useState(true);
 
-  const recarregar = useCallback(async () => {
-    const [todos, publicos, proprias, chave] = await Promise.all([
-      listarEventos(),
-      listarTimesPublicos(eventoId),
-      listarInscricoes(eventoId),
-      listarPartidas(eventoId),
-    ]);
-    setEvento(todos.find((e) => e.id === eventoId) ?? null);
-    setTimes(publicos);
-    setMinhas(proprias);
-    setPartidas(chave);
-    setCarregando(false);
-  }, [eventoId]);
+  const buscar = useCallback(
+    () =>
+      Promise.all([listarEventos(), listarTimesPublicos(eventoId), listarInscricoes(eventoId), listarPartidas(eventoId)]),
+    [eventoId]
+  );
+
+  const aplicar = useCallback(
+    ([todos, publicos, proprias, chave]: Awaited<ReturnType<typeof buscar>>) => {
+      setEvento(todos.find((e) => e.id === eventoId) ?? null);
+      setTimes(publicos);
+      setMinhas(proprias);
+      setPartidas(chave);
+      setCarregando(false);
+    },
+    [eventoId]
+  );
+
+  const recarregar = useCallback(async () => aplicar(await buscar()), [aplicar, buscar]);
 
   useEffect(() => {
-    void recarregar();
-  }, [recarregar]);
+    let ativo = true;
+    void buscar().then((dados) => {
+      if (ativo) aplicar(dados);
+    });
+    return () => {
+      ativo = false;
+    };
+  }, [buscar, aplicar]);
 
   const minhaInscricao = useMemo(
     () => (user ? minhas.find((i) => i.usuarioId === user.id) ?? null : null),
