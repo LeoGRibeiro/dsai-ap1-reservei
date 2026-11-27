@@ -14,7 +14,8 @@ export const TOLERANCIA_CANCELAMENTO_HORAS = 24;
 /**
  * Tabela de preços por faixa de horário (R$/hora), pelo horário de início do bloco.
  * Os mesmos valores estão em `mcp_server/reservei_mcp/precos.py` e na função
- * `valor_hora_quadra` do banco; a fixture `tests/fixtures/regras-preco.json` confere os três.
+ * `valor_hora_quadra` do banco. A fixture `tests/fixtures/regras-preco.json` confere
+ * o site e o MCP; a função do banco foi conferida manualmente (caso das 19h na fixture).
  */
 export const PRECOS = {
   MANHA: 70, // blocos das 08:00 às 11:00

@@ -33,7 +33,8 @@ def calcular_valor_hora(horario: str) -> int:
         ValueError: horário fora do formato ``HH:00`` ou fora de 08:00 a 21:00,
             como o erro ``horario_invalido`` do banco.
     """
-    hora = int(horario[:2]) if re.fullmatch(r"\d{2}:00", horario or "") else -1
+    # [0-9] e não \d: no Python, \d aceita dígitos Unicode, que o JS e o banco recusam.
+    hora = int(horario[:2]) if re.fullmatch(r"[0-9]{2}:00", horario or "") else -1
     if 8 <= hora < 12:
         return PRECO_MANHA
     if 12 <= hora < 18:

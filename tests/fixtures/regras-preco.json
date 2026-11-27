@@ -9,7 +9,7 @@
     { "horario": "18:00", "valor": 110 },
     { "horario": "21:00", "valor": 110 }
   ],
-  "horariosInvalidos": ["07:00", "22:00", "8:00", "18:30", ""],
+  "horariosInvalidos": ["07:00", "22:00", "8:00", "18:30", "", "١٨:00"],
   "reservas": [
     {
       "descricao": "uma hora de manha",

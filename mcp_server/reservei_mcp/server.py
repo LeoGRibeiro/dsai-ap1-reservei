@@ -15,7 +15,7 @@ import re
 import sys
 import uuid
 import time
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Optional, Dict, Any, List, Mapping, Tuple
 from pathlib import Path
 import requests
@@ -196,6 +196,17 @@ def extrair_apenas_digitos(texto: str) -> str:
     return "".join(re.findall(r"\d+", texto or ""))
 
 
+def normalizar_data_iso(texto: str) -> str:
+    """
+    Prepara um timestamp do PostgREST para ``datetime.fromisoformat`` no Python 3.10.
+
+    O Postgres corta os zeros finais dos microssegundos (``.12345``) e pode usar ``Z``;
+    até o 3.10, ``fromisoformat`` só aceita frações com 3 ou 6 dígitos e não aceita ``Z``.
+    """
+    texto = texto.replace("Z", "+00:00")
+    return re.sub(r"\.([0-9]{1,6})(?=[+-]|$)", lambda m: "." + m.group(1).ljust(6, "0"), texto)
+
+
 def reserva_ocupa_horario(reserva: Dict[str, Any], agora: Optional[datetime] = None) -> bool:
     """
     Indica se a reserva ocupa os seus horários na grade.
@@ -210,7 +221,7 @@ def reserva_ocupa_horario(reserva: Dict[str, Any], agora: Optional[datetime] = N
     if status != "em_processamento" or not expira_em:
         return True
     try:
-        limite = datetime.fromisoformat(str(expira_em).replace("Z", "+00:00"))
+        limite = datetime.fromisoformat(normalizar_data_iso(str(expira_em)))
     except ValueError:
         return True
     if limite.tzinfo is None:
@@ -218,19 +229,25 @@ def reserva_ocupa_horario(reserva: Dict[str, Any], agora: Optional[datetime] = N
     return limite > (agora or datetime.now(timezone.utc))
 
 
-def listar_reservas_supabase(data_filtro: Optional[str] = None) -> List[Dict[str, Any]]:
+def listar_reservas_supabase(data_filtro: Optional[str] = None) -> Optional[List[Dict[str, Any]]]:
     """
     Lista as reservas que ocupam horário, pela visão ``reservas_publicas`` (sem dados pessoais).
 
     Com a RLS, a chave pública não lê a tabela ``reservas``. Sem Supabase configurado,
-    ou se a consulta falhar, usa as reservas guardadas em memória.
+    usa as reservas guardadas em memória.
 
     Args:
         data_filtro: Data opcional no formato 'AAAA-MM-DD' para restringir a busca.
+
+    Returns:
+        A lista de reservas, ou ``None`` se o Supabase está configurado e a consulta falhou
+        (nesse caso a agenda é desconhecida e não pode ser mostrada como livre).
     """
-    locais = [r for r in _LOCAL_FALLBACK_RESERVAS if not data_filtro or r.get("data") == data_filtro]
     if not SUPABASE_URL or not SUPABASE_KEY:
-        return [r for r in locais if reserva_ocupa_horario(r)]
+        return [
+            r for r in _LOCAL_FALLBACK_RESERVAS
+            if (not data_filtro or r.get("data") == data_filtro) and reserva_ocupa_horario(r)
+        ]
 
     url = f"{SUPABASE_URL}/rest/v1/reservas_publicas?select=*&status=neq.cancelada"
     if data_filtro:
@@ -242,9 +259,8 @@ def listar_reservas_supabase(data_filtro: Optional[str] = None) -> List[Dict[str
             return [r for r in resp.json() if reserva_ocupa_horario(r)]
         print(f"[Aviso MCP] Consulta ao Supabase recusada: {resp.status_code}", file=sys.stderr)
     except Exception as err:
-        print(f"[Aviso MCP] Falha na consulta ao Supabase ({err}). Utilizando armazenamento local.", file=sys.stderr)
-
-    return [r for r in locais if reserva_ocupa_horario(r)]
+        print(f"[Aviso MCP] Falha na consulta ao Supabase ({err}).", file=sys.stderr)
+    return None
 
 
 def traduzir_erro_reserva_agente(resp: Any) -> str:
@@ -284,7 +300,11 @@ def criar_reserva_supabase(
         return None, MENSAGEM_ERRO_GENERICA
 
     if resp.status_code == 200:
-        return str(resp.json()), None
+        try:
+            return str(resp.json()), None
+        except ValueError:
+            print(f"[Aviso MCP] Resposta de sucesso sem JSON: {resp.text}", file=sys.stderr)
+            return None, MENSAGEM_ERRO_GENERICA
     print(f"[Aviso MCP] Reserva recusada pelo Supabase: {resp.status_code} - {resp.text}", file=sys.stderr)
     return None, traduzir_erro_reserva_agente(resp)
 
@@ -317,6 +337,11 @@ def consultar_disponibilidade(data: str, quadra_id: Optional[str] = None) -> str
         quadras_alvo = [normalizado]
 
     reservas = listar_reservas_supabase(data_filtro=data)
+    if reservas is None:
+        return (
+            "Erro: Não foi possível consultar a agenda do complexo agora. "
+            "Tente novamente em instantes."
+        )
 
     ocupados_por_quadra: Dict[str, Dict[str, str]] = {q: {} for q in quadras_alvo}
     for r in reservas:
@@ -412,6 +437,13 @@ def criar_reserva(
 
     if not re.match(r"^\d{4}-\d{2}-\d{2}$", data.strip()):
         return f"Erro: Data inválida ('{data}'). O formato deve ser AAAA-MM-DD."
+    # Mesmas recusas do banco, antes de pedir a aprovação humana da reserva.
+    try:
+        data_reserva = datetime.strptime(data.strip(), "%Y-%m-%d").date()
+    except ValueError:
+        return f"Erro: A data '{data}' não existe no calendário."
+    if data_reserva < date.today():
+        return f"Erro: A data '{data}' já passou. Escolha hoje ou um dia futuro."
 
     h_limpo = horario.strip()
     if re.match(r"^\d{1,2}$", h_limpo):
@@ -429,11 +461,12 @@ def criar_reserva(
         return "Erro: O nome do cliente é obrigatório para registrar a reserva."
 
     digitos_tel = extrair_apenas_digitos(whatsapp_cliente)
-    if len(digitos_tel) < 8:
-        return "Erro: O número de WhatsApp/telefone informado é inválido (deve ter no mínimo 8 dígitos)."
+    if len(digitos_tel) < 10:
+        return "Erro: Informe o WhatsApp com DDD (10 ou 11 dígitos, ex.: '91988887777')."
 
-    # Prevenção rigorosa de Double Booking
-    reservas_existentes = listar_reservas_supabase(data_filtro=data)
+    # Prevenção de Double Booking. Se a agenda não puder ser lida, o banco decide
+    # (a função criar_reserva_agente recusa horário ocupado com 'horario_ocupado').
+    reservas_existentes = listar_reservas_supabase(data_filtro=data) or []
     for r in reservas_existentes:
         q_existente = r.get("quadra_id") or r.get("quadraId")
         if q_existente == q_canonico:

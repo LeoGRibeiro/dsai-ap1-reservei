@@ -111,7 +111,7 @@ O Reservei disponibiliza um **Servidor MCP Oficial** ([`mcp_server/`](./mcp_serv
 
 ### Ferramentas Expostas ao Agente:
 1. `consultar_disponibilidade`: Grade em tempo real de horários livres e ocupados por data (`AAAA-MM-DD`).
-2. `buscar_reservas_cliente`: Localização do histórico de reservas por número de telefone/WhatsApp.
+2. `buscar_reservas_cliente`: Orienta o cliente a consultar as próprias reservas em "Minha Conta", no site (a consulta por telefone foi desativada pela RLS).
 3. `criar_reserva`: Agendamento seguro com bloqueio imediato e prevenção contra *double booking* (requer autorização humana `ask`).
 
 ### Como Usar em Qualquer Assistente (Zero-Config via `uvx`):

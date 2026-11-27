@@ -156,3 +156,70 @@ def test_buscar_reservas_por_telefone_orienta_a_usar_o_site_sem_consultar_o_banc
     assert "Minha Conta" in saida
     get.assert_not_called()
     post.assert_not_called()
+
+
+# ─── Correções da revisão de código ──────────────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    "entrada, esperado",
+    [
+        ("2026-11-27T15:20:01.12345+00:00", "2026-11-27T15:20:01.123450+00:00"),
+        ("2026-11-27T15:20:01.1Z", "2026-11-27T15:20:01.100000+00:00"),
+        ("2026-11-27T15:20:01+00:00", "2026-11-27T15:20:01+00:00"),
+    ],
+)
+def test_normaliza_data_do_postgrest_para_o_python_310(entrada, esperado):
+    # No Python 3.10, fromisoformat só aceita frações com 3 ou 6 dígitos;
+    # o Postgres corta os zeros finais dos microssegundos.
+    assert server.normalizar_data_iso(entrada) == esperado
+
+
+def test_provisoria_vencida_com_fracao_de_5_digitos_nao_ocupa_o_horario():
+    reserva = {"status": "em_processamento", "expira_em": "2000-01-01T00:00:00.12345+00:00"}
+    assert server.reserva_ocupa_horario(reserva) is False
+
+
+def test_falha_ao_consultar_a_agenda_nao_mostra_a_grade_livre():
+    get = MagicMock(return_value=resposta(500, {"message": "erro"}))
+    with supabase_configurado(get=get):
+        saida = server.consultar_disponibilidade(DATA, "q1")
+
+    assert "Não foi possível consultar a agenda" in saida
+    assert "Horários Livres" not in saida
+
+
+def test_falha_ao_consultar_a_agenda_deixa_o_banco_decidir_a_reserva():
+    get = MagicMock(side_effect=server.requests.ConnectionError("sem rede"))
+    post = MagicMock(return_value=resposta(200, "rsv_mcp_abc123"))
+    with supabase_configurado(get=get, post=post):
+        saida = criar_19h()
+
+    post.assert_called_once()
+    assert "rsv_mcp_abc123" in saida
+
+
+def test_whatsapp_sem_ddd_e_recusado_antes_de_pedir_ao_banco():
+    with supabase_configurado() as (_, post):
+        saida = server.criar_reserva("q1", DATA, "19:00", "Maria", "98888-7777")
+
+    assert "DDD" in saida
+    post.assert_not_called()
+
+
+@pytest.mark.parametrize("data", ["2026-02-30", "2000-01-01"])
+def test_data_inexistente_ou_passada_e_recusada_antes_de_pedir_ao_banco(data):
+    with supabase_configurado() as (_, post):
+        saida = server.criar_reserva("q1", data, "19:00", "Maria", "91988887777")
+
+    assert saida.startswith("Erro:")
+    post.assert_not_called()
+
+
+def test_resposta_de_sucesso_sem_json_vira_mensagem_generica():
+    ok_sem_json = MagicMock(status_code=200, text="<html>")
+    ok_sem_json.json.side_effect = ValueError("não é JSON")
+    with supabase_configurado(post=MagicMock(return_value=ok_sem_json)):
+        saida = criar_19h()
+
+    assert "falha inesperada" in saida
