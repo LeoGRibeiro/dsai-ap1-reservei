@@ -46,6 +46,8 @@ vi.mock("@/hooks/useFidelidadeService", () => ({
 }));
 vi.mock("@/components/fidelidade/CartelaFidelidadeTimeline", () => ({ CartelaFidelidadeTimeline: () => null }));
 vi.mock("@/components/vagas/ModalGerenciarVagas", () => ({ ModalGerenciarVagas: () => null }));
+const avaliacoes = vi.hoisted(() => ({ porReserva: {} as Record<string, unknown>, salvar: vi.fn() }));
+vi.mock("@/hooks/useAvaliacoes", () => ({ useMinhasAvaliacoes: () => avaliacoes }));
 
 // "Agora" fixo: 19/11/2026 às 10:00 (horário local)
 const AGORA = new Date(2026, 10, 19, 10, 0, 0);
@@ -130,5 +132,42 @@ describe("Minha Conta - cancelamento com 24 horas de antecedência", () => {
     expect(screen.getByText("#contrato")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Cancelar Reserva/ })).not.toBeInTheDocument();
     expect(screen.getByText(/contrato recorrente/)).toBeInTheDocument();
+  });
+});
+
+describe("Minha Conta - avaliação de reservas jogadas", () => {
+  // Spec: SPEC/2026-11-27-avaliacoes-de-clientes.md
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(AGORA);
+    vi.clearAllMocks();
+    avaliacoes.porReserva = {};
+    avaliacoes.salvar.mockResolvedValue({ ok: true });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("reserva jogada no histórico pode ser avaliada", async () => {
+    reservasMock = [reserva("jogada001", "2026-11-17", "18:00")];
+    render(<MinhaContaPage />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Avaliar" }));
+    fireEvent.click(screen.getByLabelText("5 estrelas"));
+    fireEvent.click(screen.getByRole("button", { name: "Enviar avaliação" }));
+    await waitFor(() => expect(avaliacoes.salvar).toHaveBeenCalledWith("jogada001", { nota: 5, comentario: "" }));
+  });
+
+  it("reserva já avaliada mostra a nota e a situação", () => {
+    reservasMock = [reserva("jogada002", "2026-11-17", "18:00")];
+    avaliacoes.porReserva = {
+      jogada002: { id: "a1", reservaId: "jogada002", usuarioId: "user_1", nota: 4, comentario: null, status: "aprovada", criadaEm: "" },
+    };
+    render(<MinhaContaPage />);
+
+    expect(screen.getByLabelText("Nota 4 de 5")).toBeInTheDocument();
+    expect(screen.getByText("Publicada")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Avaliar" })).not.toBeInTheDocument();
   });
 });

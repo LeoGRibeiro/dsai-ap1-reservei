@@ -43,6 +43,8 @@ import {
   Gift,
 } from "lucide-react";
 import { useVagasService } from "@/hooks/useVagasService";
+import { useMinhasAvaliacoes } from "@/hooks/useAvaliacoes";
+import { AvaliarReserva } from "@/components/avaliacoes/AvaliarReserva";
 import { useFidelidadeService } from "@/hooks/useFidelidadeService";
 import { CartelaFidelidadeTimeline } from "@/components/fidelidade/CartelaFidelidadeTimeline";
 import { ModalGerenciarVagas } from "@/components/vagas/ModalGerenciarVagas";
@@ -62,6 +64,8 @@ export default function MinhaContaPage() {
   const { reservas, cancelarReserva } = useReservasService();
   const { getTotalNovosInteressados } = useVagasService();
   const { progresso, carregando: carregandoFidelidade, resgatarVoucher } = useFidelidadeService();
+  const { porReserva: avaliacoesPorReserva, salvar: salvarAvaliacao } = useMinhasAvaliacoes();
+  const [agora] = useState(() => new Date());
   const [reservaGerenciarVagas, setReservaGerenciarVagas] = useState<Reserva | null>(null);
   const [reservaParaCancelar, setReservaParaCancelar] = useState<Reserva | null>(null);
   const [cancelandoReserva, setCancelandoReserva] = useState(false);
@@ -588,6 +592,12 @@ export default function MinhaContaPage() {
                           <p className="text-slate-500 text-[11px] mt-0.5">
                             {formatarDataExibicao(r.data)}
                           </p>
+                          <AvaliarReserva
+                            reserva={r}
+                            avaliacao={avaliacoesPorReserva[r.id]}
+                            agora={agora}
+                            onSalvar={salvarAvaliacao}
+                          />
                         </div>
                         <div className="text-right">
                           <span
