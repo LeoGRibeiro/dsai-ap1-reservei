@@ -286,7 +286,7 @@ export function ModalGerenciarVagas({
             {interessados.length === 0 ? (
               <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-5 text-center text-xs text-slate-400">
                 Ainda não há jogadores interessados nesta partida. Assim que alguém clicar em
-                "Mostrar Interesse" no Mural, o contato aparecerá aqui para você chamar!
+                &ldquo;Mostrar Interesse&rdquo; no Mural, o contato aparecerá aqui para você chamar!
               </div>
             ) : (
               <div className="space-y-2.5 max-h-56 overflow-y-auto pr-1">

@@ -185,13 +185,11 @@ export function FormularioIdentificacao({
       return;
     }
 
-    if (user) {
-      dados.nome = user.nome;
-      dados.whatsapp = user.telefone;
-    }
     if (!validar()) return;
 
-    onConfirmar(dados, isGratis ? "integral" : tipoPagamento);
+    // Cliente logado: usa nome e WhatsApp da conta, sem alterar o estado do formulário.
+    const dadosFinais = user ? { ...dados, nome: user.nome, whatsapp: user.telefone } : dados;
+    onConfirmar(dadosFinais, isGratis ? "integral" : tipoPagamento);
   };
 
   const handleClose = () => {

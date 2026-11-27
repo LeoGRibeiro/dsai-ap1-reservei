@@ -8,6 +8,7 @@
     "start": "npm --prefix src run start",
     "lint": "npm --prefix src run lint",
     "typecheck": "npm --prefix src run typecheck",
-    "test": "npm --prefix src run test"
+    "test": "npm --prefix src run test",
+    "test:coverage": "npm --prefix src run test:coverage"
   }
 }

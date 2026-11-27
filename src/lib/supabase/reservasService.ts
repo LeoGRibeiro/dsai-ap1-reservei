@@ -1,11 +1,19 @@
 import { supabase, isSupabaseConfigured } from "./client";
 import { rowToReserva, reservaToRow, type ReservaDbRow } from "./types";
+import { mesclarPorId } from "@/lib/dados/mesclarPorId";
 import type { Reserva } from "@/store/useReservasStore";
+import {
+  classificarErroGravacaoReserva,
+  type ResultadoGravacaoReserva,
+} from "@/lib/reservas/garantiaHorario";
 
 const TABELA_RESERVAS = "reservas";
+const VISAO_RESERVAS_PUBLICAS = "reservas_publicas";
 
 /**
- * Busca todas as reservas cadastradas no Supabase.
+ * Busca as reservas visíveis para a sessão: completas as que a RLS libera
+ * (todas para o admin, as próprias para o cliente) e, para as demais, a visão
+ * pública `reservas_publicas`, sem dados pessoais, que alimenta a grade.
  */
 export async function fetchReservasSupabase(): Promise<Reserva[] | null> {
   if (!isSupabaseConfigured()) {
@@ -13,17 +21,19 @@ export async function fetchReservasSupabase(): Promise<Reserva[] | null> {
   }
 
   try {
-    const { data, error } = await supabase
-      .from(TABELA_RESERVAS)
-      .select("*")
-      .order("criada_em", { ascending: false });
+    const [completas, publicas] = await Promise.all([
+      supabase.from(TABELA_RESERVAS).select("*").order("criada_em", { ascending: false }),
+      supabase.from(VISAO_RESERVAS_PUBLICAS).select("*"),
+    ]);
 
-    if (error) {
-      console.error("[Supabase] Erro ao carregar reservas:", error.message);
-      return null;
-    }
+    if (completas.error) console.error("[Supabase] Erro ao carregar reservas:", completas.error.message);
+    if (publicas.error) console.error("[Supabase] Erro ao carregar a grade pública:", publicas.error.message);
+    if (completas.error && publicas.error) return null;
 
-    return (data as ReservaDbRow[]).map(rowToReserva);
+    return mesclarPorId(
+      ((completas.data ?? []) as ReservaDbRow[]).map(rowToReserva),
+      ((publicas.data ?? []) as ReservaDbRow[]).map(rowToReserva)
+    );
   } catch (err) {
     console.error("[Supabase] Falha inesperada ao buscar reservas:", err);
     return null;
@@ -100,39 +110,46 @@ function expurgarColunaIncompativel(
 }
 
 /**
- * Insere uma nova reserva no banco de dados Supabase.
- * Trata graciosamente eventuais colunas ausentes no schema cache com retry automático resiliente.
+ * Executa uma gravação repetindo-a quando o PostgREST reclama de coluna ausente
+ * (banco com schema antigo). Erros de regra do banco não são repetidos.
  */
-export async function inserirReservaSupabase(reserva: Reserva): Promise<boolean> {
+async function gravarComCompatibilidade(
+  payload: Record<string, unknown>,
+  gravar: (payload: Record<string, unknown>) => PromiseLike<{ error: { code?: string; message: string } | null }>,
+  contexto: string
+): Promise<ResultadoGravacaoReserva> {
   if (!isSupabaseConfigured()) {
-    return false;
+    return { ok: false, motivo: "falha" };
   }
 
   try {
-    const payload: Record<string, unknown> = { ...reservaToRow(reserva) };
-    let tentativa = 0;
+    for (let tentativa = 0; tentativa < 6; tentativa++) {
+      const { error } = await gravar(payload);
+      if (!error) return { ok: true };
+      if (expurgarColunaIncompativel(payload, error.message)) continue;
 
-    while (tentativa < 6) {
-      const { error } = await supabase.from(TABELA_RESERVAS).insert([payload]);
-
-      if (!error) {
-        return true;
-      }
-
-      if (expurgarColunaIncompativel(payload, error.message)) {
-        tentativa++;
-        continue;
-      }
-
-      console.error("[Supabase] Erro ao inserir reserva:", error.message);
-      return false;
+      console.error(`[Supabase] Erro ao ${contexto}:`, error.message);
+      return { ok: false, motivo: classificarErroGravacaoReserva(error) };
     }
-
-    return false;
+    return { ok: false, motivo: "falha" };
   } catch (err) {
-    console.error("[Supabase] Falha inesperada ao inserir reserva:", err);
-    return false;
+    console.error(`[Supabase] Falha inesperada ao ${contexto}:`, err);
+    return { ok: false, motivo: "falha" };
   }
+}
+
+/** Insere uma reserva e informa por que o banco recusou (ex.: horário ocupado). */
+export function inserirReservaComResultado(reserva: Reserva): Promise<ResultadoGravacaoReserva> {
+  return gravarComCompatibilidade(
+    { ...reservaToRow(reserva) },
+    (payload) => supabase.from(TABELA_RESERVAS).insert([payload]),
+    "inserir reserva"
+  );
+}
+
+/** Insere uma nova reserva no banco de dados Supabase. */
+export async function inserirReservaSupabase(reserva: Reserva): Promise<boolean> {
+  return (await inserirReservaComResultado(reserva)).ok;
 }
 
 /**
@@ -200,47 +217,24 @@ export async function atualizarReservasEmLoteSupabase(
   }
 }
 
-/**
- * Atualiza campos de uma reserva existente no Supabase.
- * Trata graciosamente caso colunas novas (ex: fidelidade) ainda não existam no schema do PostgreSQL,
- * removendo campos incompatíveis e tentando novamente sem interromper o fluxo da aplicação.
- */
+/** Atualiza uma reserva e informa por que o banco recusou (ex.: prazo vencido). */
+export function atualizarReservaComResultado(
+  id: string,
+  dados: Partial<Reserva>
+): Promise<ResultadoGravacaoReserva> {
+  return gravarComCompatibilidade(
+    { ...reservaToRow(dados) },
+    (payload) => supabase.from(TABELA_RESERVAS).update(payload).eq("id", id),
+    `atualizar reserva ${id}`
+  );
+}
+
+/** Atualiza campos de uma reserva existente no Supabase. */
 export async function atualizarReservaSupabase(
   id: string,
   dados: Partial<Reserva>
 ): Promise<boolean> {
-  if (!isSupabaseConfigured()) {
-    return false;
-  }
-
-  try {
-    const payload: Record<string, unknown> = { ...reservaToRow(dados) };
-    let tentativa = 0;
-
-    while (tentativa < 6) {
-      const { error } = await supabase
-        .from(TABELA_RESERVAS)
-        .update(payload)
-        .eq("id", id);
-
-      if (!error) {
-        return true;
-      }
-
-      if (expurgarColunaIncompativel(payload, error.message)) {
-        tentativa++;
-        continue;
-      }
-
-      console.error(`[Supabase] Erro ao atualizar reserva ${id}:`, error.message);
-      return false;
-    }
-
-    return false;
-  } catch (err) {
-    console.error(`[Supabase] Falha inesperada ao atualizar reserva ${id}:`, err);
-    return false;
-  }
+  return (await atualizarReservaComResultado(id, dados)).ok;
 }
 
 /**
@@ -271,12 +265,14 @@ export async function removerReservaSupabase(id: string): Promise<boolean> {
 
 /**
  * Cria uma inscrição Realtime para escutar inserções, atualizações e deleções
- * na tabela 'reservas' em tempo real.
+ * na tabela 'reservas' (só as linhas que a RLS libera para a sessão) e, para a
+ * grade pública, as mudanças em `reservas_horarios`, que não têm dados pessoais.
  */
 export function subscreverReservasSupabase(
   onInsert: (reserva: Reserva) => void,
   onUpdate: (reserva: Reserva) => void,
-  onDelete: (id: string) => void
+  onDelete: (id: string) => void,
+  onMudancaOcupacao?: () => void
 ) {
   if (!isSupabaseConfigured()) {
     return () => {};
@@ -334,6 +330,11 @@ export function subscreverReservasSupabase(
           onDelete(idDeletado);
         }
       }
+    )
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "reservas_horarios" },
+      () => onMudancaOcupacao?.()
     )
     .subscribe();
 

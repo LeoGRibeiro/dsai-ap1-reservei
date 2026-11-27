@@ -21,15 +21,23 @@ import type { Esporte } from "@/lib/quadras";
 import {
   fetchReservasSupabase,
   fetchReservasPorMesSupabase,
-  inserirReservaSupabase,
   atualizarReservaSupabase,
   removerReservaSupabase,
   subscreverReservasSupabase,
+  inserirReservaComResultado,
+  atualizarReservaComResultado,
 } from "@/lib/supabase/reservasService";
+import {
+  MENSAGENS_GRAVACAO_RESERVA,
+  reservaOcupaHorario,
+  reservaProvisoriaExpirada,
+  type ResultadoGravacaoReserva,
+} from "@/lib/reservas/garantiaHorario";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
 import {
   listarUsuariosCadastrados,
   getTelefonesCadastradosLocal,
+  garantirSessaoVisitante,
 } from "@/lib/supabase/authService";
 import {
   construirBloqueio,
@@ -55,6 +63,19 @@ export interface DadosCriacaoReserva {
   cpfCliente?: string;
   esporte?: Esporte;
   observacoes?: string;
+}
+
+export type ResultadoOperacaoReserva = { ok: true } | { ok: false; erro: string };
+
+export type ResultadoCriacaoReserva = { ok: true; id: string } | { ok: false; erro: string };
+
+/** Sem Supabase (modo local) a gravação é considerada aceita. */
+async function gravarNoBanco(
+  gravar: () => Promise<ResultadoGravacaoReserva>
+): Promise<ResultadoOperacaoReserva> {
+  if (!isSupabaseConfigured()) return { ok: true };
+  const resultado = await gravar();
+  return resultado.ok ? { ok: true } : { ok: false, erro: MENSAGENS_GRAVACAO_RESERVA[resultado.motivo] };
 }
 
 // ─── Helper de enriquecimento com usuários cadastrados ───────────────────────
@@ -131,6 +152,12 @@ export function useReservasService() {
         },
         (idDeletado) => {
           useReservasStore.getState().removerReserva(idDeletado);
+        },
+        // Reserva de outra pessoa mudou: recarrega a grade (visão pública).
+        () => {
+          void fetchReservasSupabase().then((dados) => {
+            if (dados) useReservasStore.getState().setReservas(dados);
+          });
         }
       );
     }
@@ -158,7 +185,7 @@ export function useReservasService() {
           (r) =>
             r.data === data &&
             r.quadraId === quadraId &&
-            r.status !== "cancelada"
+            reservaOcupaHorario(r, new Date())
         )
         .flatMap((r) => r.horarios);
     },
@@ -177,7 +204,7 @@ export function useReservasService() {
   const getHorariosOcupadosDia = useCallback(
     (data: string): { quadraId: string; horario: string }[] => {
       return reservas
-        .filter((r) => r.data === data && r.status !== "cancelada")
+        .filter((r) => r.data === data && reservaOcupaHorario(r, new Date()))
         .flatMap((r) => r.horarios.map((h) => ({ quadraId: r.quadraId, horario: h })));
     },
     [reservas]
@@ -230,11 +257,12 @@ export function useReservasService() {
   // ── Mutations Assíncronas (Sync com Supabase) ───────────────────────────────
 
   /**
-   * Cria uma reserva com status "em_processamento" (lock temporário).
-   * Grava diretamente no Supabase e atualiza o estado local imediatamente.
+   * Cria a reserva provisória ("em_processamento"), que segura o horário por
+   * 10 minutos. Só aparece na tela depois que o banco aceita: se outra pessoa
+   * pegou o horário antes, devolve a mensagem de horário ocupado.
    */
   const criarReservaEmProcessamento = useCallback(
-    (dados: DadosCriacaoReserva): string => {
+    async (dados: DadosCriacaoReserva): Promise<ResultadoCriacaoReserva> => {
       const horarios = [...dados.horarios].sort();
       const valorTotal = calcularValorTotal(horarios);
       const id = `rsv_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
@@ -267,13 +295,15 @@ export function useReservasService() {
         observacoes: dados.observacoes,
       };
 
-      // Atualização otimista no estado local
+      // Visitante sem conta recebe sessão anônima (dona da reserva nas regras de acesso).
+      const gravacao = await gravarNoBanco(async () => {
+        await garantirSessaoVisitante();
+        return inserirReservaComResultado(reserva);
+      });
+      if (!gravacao.ok) return gravacao;
+
       adicionarReserva(reserva);
-
-      // Persistência assíncrona no Supabase
-      void inserirReservaSupabase(reserva);
-
-      return id;
+      return { ok: true, id };
     },
     [adicionarReserva]
   );
@@ -321,27 +351,28 @@ export function useReservasService() {
 
 
   /**
-   * Confirma o pagamento — atualiza status e valores no Supabase (UPDATE).
+   * Confirma o pagamento da reserva provisória. Recusa se o prazo de 10 minutos
+   * venceu; o estado local só muda depois que o banco aceita.
    */
   const confirmarPagamento = useCallback(
-    (id: string, tipoPagamento: "sinal" | "integral") => {
+    async (id: string, tipoPagamento: "sinal" | "integral"): Promise<ResultadoOperacaoReserva> => {
       const reserva = getReservaById(id);
-      if (!reserva) return;
-
-      const atualizacao: Partial<Reserva> = {
-        // sinal: ainda precisa comparecer para pagar o restante → "pendente"
-        // integral: pagamento completo, sem pendência no local → "confirmada"
-        status: tipoPagamento === "integral" ? "confirmada" : "pendente",
-        statusWhatsApp: "enviado",
-      };
-
-      if (tipoPagamento === "integral") {
-        atualizacao.valorSinal = reserva.valorTotal;
-        atualizacao.valorPendente = 0;
+      if (!reserva) return { ok: false, erro: MENSAGENS_GRAVACAO_RESERVA.reserva_expirada };
+      if (reservaProvisoriaExpirada(reserva, new Date())) {
+        return { ok: false, erro: MENSAGENS_GRAVACAO_RESERVA.reserva_expirada };
       }
 
+      // sinal: restante pago no local ("pendente"); integral: nada a pagar ("confirmada")
+      const atualizacao: Partial<Reserva> =
+        tipoPagamento === "integral"
+          ? { status: "confirmada", valorSinal: reserva.valorTotal, valorPendente: 0 }
+          : { status: "pendente" };
+
+      const gravacao = await gravarNoBanco(() => atualizarReservaComResultado(id, atualizacao));
+      if (!gravacao.ok) return gravacao;
+
       atualizarReserva(id, atualizacao);
-      void atualizarReservaSupabase(id, atualizacao);
+      return { ok: true };
     },
     [atualizarReserva, getReservaById]
   );
@@ -478,13 +509,10 @@ export function useReservasService() {
       }
 
       const novaReserva = construirReservaManual(dados);
+      const gravacao = await gravarNoBanco(() => inserirReservaComResultado(novaReserva));
+      if (!gravacao.ok) return { ok: false, motivo: gravacao.erro };
 
-      // Atualização otimista no estado local
       adicionarReserva(novaReserva);
-
-      // Persistência assíncrona no Supabase
-      void inserirReservaSupabase(novaReserva);
-
       return {
         ok: true,
         reserva: novaReserva,
@@ -515,13 +543,10 @@ export function useReservasService() {
       }
 
       const novoBloqueio = construirBloqueio(dados);
+      const gravacao = await gravarNoBanco(() => inserirReservaComResultado(novoBloqueio));
+      if (!gravacao.ok) return { ok: false, motivo: gravacao.erro };
 
-      // Atualização otimista no estado local
       adicionarReserva(novoBloqueio);
-
-      // Persistência assíncrona no Supabase
-      void inserirReservaSupabase(novoBloqueio);
-
       return {
         ok: true,
         reserva: novoBloqueio,

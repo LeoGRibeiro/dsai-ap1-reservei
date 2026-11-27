@@ -1,37 +1,35 @@
 /**
- * Tela de login do painel administrativo.
- * Verifica a senha mockada e grava flag no LocalStorage.
+ * Tela de login do painel administrativo (e-mail e senha no Supabase Auth).
+ * Spec: SPEC/2026-11-18-login-real-admin.md
  */
 
 "use client";
 
 import { useState } from "react";
-import { Eye, EyeOff, Lock, Shield } from "lucide-react";
+import { Eye, EyeOff, Lock, Mail, Shield } from "lucide-react";
 
 interface Props {
-  onLogin: (senha: string) => boolean;
+  onLogin: (email: string, senha: string) => Promise<{ ok: boolean; erro?: string }>;
 }
 
 export function AdminLogin({ onLogin }: Props) {
+  const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
   const [mostrarSenha, setMostrarSenha] = useState(false);
-  const [erro, setErro] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(false);
   const [shake, setShake] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setCarregando(true);
-    setErro(false);
+    setErro(null);
 
-    // Pequeno delay para dar sensação de verificação
-    await new Promise((r) => setTimeout(r, 600));
-
-    const ok = onLogin(senha);
+    const resultado = await onLogin(email, senha);
     setCarregando(false);
 
-    if (!ok) {
-      setErro(true);
+    if (!resultado.ok) {
+      setErro(resultado.erro ?? "Não foi possível entrar.");
       setSenha("");
       setShake(true);
       setTimeout(() => setShake(false), 500);
@@ -72,8 +70,30 @@ export function AdminLogin({ onLogin }: Props) {
           {/* Form */}
           <form onSubmit={handleSubmit} className="px-8 py-8 space-y-5">
             <div className="space-y-2">
-              <label className="block text-sm font-medium text-slate-300">
-                Senha de acesso
+              <label htmlFor="admin-email" className="block text-sm font-medium text-slate-300">
+                E-mail
+              </label>
+              <div className="relative group">
+                <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 group-focus-within:text-emerald-400 transition-colors" />
+                <input
+                  id="admin-email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    if (erro) setErro(null);
+                  }}
+                  placeholder="admin@complexo.com"
+                  autoComplete="username"
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl pl-10 pr-3 py-3 text-sm text-white placeholder-slate-500 outline-none transition-all focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20"
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label htmlFor="admin-senha" className="block text-sm font-medium text-slate-300">
+                Senha
               </label>
               <div className="relative group">
                 <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 group-focus-within:text-emerald-400 transition-colors" />
@@ -83,7 +103,7 @@ export function AdminLogin({ onLogin }: Props) {
                   value={senha}
                   onChange={(e) => {
                     setSenha(e.target.value);
-                    if (erro) setErro(false);
+                    if (erro) setErro(null);
                   }}
                   placeholder="••••••••"
                   autoComplete="current-password"
@@ -97,6 +117,7 @@ export function AdminLogin({ onLogin }: Props) {
                 />
                 <button
                   type="button"
+                  aria-label={mostrarSenha ? "Ocultar senha" : "Mostrar senha"}
                   onClick={() => setMostrarSenha((v) => !v)}
                   className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors"
                 >
@@ -108,9 +129,9 @@ export function AdminLogin({ onLogin }: Props) {
                 </button>
               </div>
               {erro && (
-                <p className="text-red-400 text-xs flex items-center gap-1.5 animate-fade-in">
+                <p role="alert" className="text-red-400 text-xs flex items-center gap-1.5 animate-fade-in">
                   <span className="inline-block w-1 h-1 rounded-full bg-red-400" />
-                  Senha incorreta. Tente novamente.
+                  {erro}
                 </p>
               )}
             </div>
@@ -118,7 +139,7 @@ export function AdminLogin({ onLogin }: Props) {
             <button
               id="admin-login-btn"
               type="submit"
-              disabled={carregando || !senha}
+              disabled={carregando || !email.trim() || !senha}
               className="w-full bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 disabled:cursor-not-allowed text-slate-950 font-semibold rounded-xl py-3 text-sm transition-all duration-200 flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20"
             >
               {carregando ? (

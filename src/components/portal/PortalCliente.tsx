@@ -172,6 +172,15 @@ export function PortalCliente() {
     setVouchersSelecionadosIds([]);
   }, []);
 
+  /** O banco recusou a reserva (horário tomado ou prazo vencido): volta para a grade. */
+  const voltarParaGradeComErro = useCallback((erro: string) => {
+    toast.error("Reserva não concluída", { description: erro, duration: 7000 });
+    setEtapa(null);
+    setReservaIdAtual(null);
+    setDadosForm(null);
+    setHorariosSelecionados([]);
+  }, []);
+
   const handleContinuar = useCallback(async () => {
     if (!quadraSelecionada || horariosSelecionados.length === 0) return;
 
@@ -194,28 +203,32 @@ export function PortalCliente() {
       }
     }
 
-    const id = criarReservaEmProcessamento({
+    const criacao = await criarReservaEmProcessamento({
       quadraId: quadraSelecionada,
       data: dataSelecionada,
       horarios: horariosSelecionados,
       userId: user?.id,
     });
-    setReservaIdAtual(id);
+    if (!criacao.ok) {
+      setIsCarrinhoOpen(false);
+      voltarParaGradeComErro(criacao.erro);
+      return;
+    }
+    setReservaIdAtual(criacao.id);
     setIsCarrinhoOpen(false);
     setEtapa("formulario");
   }, [
     quadraSelecionada,
     horariosSelecionados,
     dataSelecionada,
-    user?.id,
-    user?.bloqueado,
-    user?.telefone,
+    user,
     criarReservaEmProcessamento,
+    voltarParaGradeComErro,
   ]);
 
   /** Formulário de dados e escolha de pagamento confirmados */
   const handleFormConfirmar = useCallback(
-    (dados: DadosIdentificacao, tipoPagamento: "sinal" | "integral") => {
+    async (dados: DadosIdentificacao, tipoPagamento: "sinal" | "integral") => {
       if (!reservaIdAtual) return;
       setDadosForm(dados);
       setTipoPagamentoEscolhido(tipoPagamento);
@@ -248,7 +261,11 @@ export function PortalCliente() {
 
       // Se a reserva for 100% coberta pelos vouchers de fidelidade (valorTotal === 0)
       if (isGratis) {
-        confirmarPagamento(reservaIdAtual, "integral");
+        const pagamento = await confirmarPagamento(reservaIdAtual, "integral");
+        if (!pagamento.ok) {
+          voltarParaGradeComErro(pagamento.erro);
+          return;
+        }
 
         // Consome os vouchers selecionados utilizados nesta reserva
         void consumirVouchersNoCheckout(
@@ -301,6 +318,7 @@ export function PortalCliente() {
       confirmarPagamento,
       consumirVouchersNoCheckout,
       isAutenticado,
+      voltarParaGradeComErro,
     ]
   );
 
@@ -308,7 +326,7 @@ export function PortalCliente() {
    * Simula pagamento Pix — confirmação com o tipo escolhido previamente.
    */
   const handleSimularPagamento = useCallback(
-    (tipo: "sinal" | "integral") => {
+    async (tipo: "sinal" | "integral") => {
       if (!reservaIdAtual) return;
 
       // Validação de 1 minuto antes do início do primeiro horário
@@ -322,7 +340,11 @@ export function PortalCliente() {
         }
       }
 
-      confirmarPagamento(reservaIdAtual, tipo);
+      const pagamento = await confirmarPagamento(reservaIdAtual, tipo);
+      if (!pagamento.ok) {
+        voltarParaGradeComErro(pagamento.erro);
+        return;
+      }
 
       // Consome os vouchers de fidelidade selecionados se foram aplicados nesta reserva
       if (vouchersAtivosParaReserva.length > 0 && reservaIdAtual) {
@@ -369,6 +391,7 @@ export function PortalCliente() {
       horariosSelecionados,
       vouchersAtivosParaReserva,
       consumirVouchersNoCheckout,
+      voltarParaGradeComErro,
     ]
   );
 

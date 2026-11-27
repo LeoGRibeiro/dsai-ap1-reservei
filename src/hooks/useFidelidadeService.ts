@@ -83,7 +83,7 @@ export function useFidelidadeService() {
     } finally {
       setCarregando(false);
     }
-  }, [usuarioId, user?.telefone, reservas]);
+  }, [usuarioId, user, reservas]);
 
   useEffect(() => {
     void recarregarDados();

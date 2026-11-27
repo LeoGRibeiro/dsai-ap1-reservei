@@ -1,11 +1,34 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import {
-  cadastrarUsuarioSupabase,
   toggleBloqueioUsuario,
   isTelefoneBloqueado,
   listarUsuariosCadastrados,
-  obterUsuarioAtual,
 } from "@/lib/supabase/authService";
+import { getUsuarioCacheLocal } from "@/store/useAuthStore";
+import { mascaraWhatsApp } from "@/lib/constants";
+import type { UserProfile } from "@/lib/supabase/types";
+
+// O cadastro agora é feito pelo Supabase Auth (SPEC/2026-11-24-login-cliente-supabase-auth.md).
+// Estes testes cobrem o bloqueio no modo local, então o cliente é criado direto
+// na base local, e a "sessão do navegador" é o cache de exibição do perfil.
+let sequencia = 0;
+async function cadastrarUsuarioSupabase(
+  nome: string,
+  telefone: string,
+  _senha: string
+): Promise<{ user: UserProfile | null }> {
+  const id = `usr_teste_${++sequencia}`;
+  const base = JSON.parse(localStorage.getItem("reservei_users_db") ?? "[]");
+  base.push({ id, nome, telefone, criado_em: new Date().toISOString() });
+  localStorage.setItem("reservei_users_db", JSON.stringify(base));
+  const user: UserProfile = { id, nome, telefone: mascaraWhatsApp(telefone), bloqueado: false, motivo_bloqueio: null };
+  localStorage.setItem("reservei_current_user", JSON.stringify(user));
+  return { user };
+}
+
+async function obterUsuarioAtual(): Promise<UserProfile | null> {
+  return getUsuarioCacheLocal();
+}
 
 describe("Gestão de Bloqueio de Usuários", () => {
   beforeEach(() => {

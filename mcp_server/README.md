@@ -124,14 +124,14 @@ O Model Context Protocol inclui suporte nativo a níveis de autorização:
 
 ---
 
-## ⚙️ Variáveis de Ambiente Opcionais
+## ⚙️ Variáveis de Ambiente
 
-O servidor já vem configurado com conexão direta e segura à instância oficial do Reservei no Supabase. Caso você queira apontar para sua própria infraestrutura ou banco de dados de homologação, defina as variáveis no bloco `"env"` do client:
+O servidor **não traz nenhuma URL ou chave embutida no código**. Para acessar um banco Supabase, defina as variáveis no bloco `"env"` do client (ou em um arquivo `.env`/`.env.local` na pasta de trabalho, na raiz do repositório ou em `src/`). Sem elas, o servidor funciona em **modo local**: as reservas ficam só na memória do processo e nenhum banco é acessado.
 
 | Variável | Padrão | Descrição |
 | :--- | :--- | :--- |
-| `NEXT_PUBLIC_SUPABASE_URL` ou `SUPABASE_URL` | Instância Oficial Reservei | URL da API REST do Supabase |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` ou `SUPABASE_ANON_KEY` | Chave Anon Oficial | Chave pública anônima com permissão RLS de agendamento |
+| `NEXT_PUBLIC_SUPABASE_URL` ou `SUPABASE_URL` | (vazio: modo local) | URL da API REST do Supabase |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_PUBLISHABLE_KEY` ou `SUPABASE_ANON_KEY` | (vazio: modo local) | Chave pública do projeto (publishable key `sb_publishable_...` ou anon key JWT) |
 
 Exemplo de customização:
 ```json
@@ -141,7 +141,7 @@ Exemplo de customização:
       "command": "reservei-mcp",
       "env": {
         "SUPABASE_URL": "https://seu-projeto.supabase.co",
-        "SUPABASE_ANON_KEY": "sua-chave-anon"
+        "SUPABASE_PUBLISHABLE_KEY": "sua-chave-publica"
       }
     }
   }
