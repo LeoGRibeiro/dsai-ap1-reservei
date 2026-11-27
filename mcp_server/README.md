@@ -11,7 +11,7 @@ Permite que assistentes e agentes de Inteligência Artificial (**Claude Desktop*
 | Tool | Tipo | Permissão Padrão | Descrição | Parâmetros |
 | :--- | :--- | :--- | :--- | :--- |
 | `consultar_disponibilidade` | Leitura | `allow` (automática) | Retorna a grade com horários livres e ocupados de cada quadra em uma data específica. | `data` (`AAAA-MM-DD`), `quadra_id` (opcional: `q1`, `q2`, `q3`) |
-| `buscar_reservas_cliente` | Leitura | `allow` (automática) | Localiza todas as reservas (passadas e futuras) associadas ao telefone/WhatsApp informado. | `telefone_ou_whatsapp` (`string`) |
+| `buscar_reservas_cliente` | Leitura | `allow` (automática) | Orienta o cliente a consultar as próprias reservas em "Minha Conta", no site (a consulta por telefone foi desativada pela RLS). | `telefone_ou_whatsapp` (`string`) |
 | `criar_reserva` | Escrita | `ask` (requer aprovação humana) | Cria um agendamento com persistência no Supabase e bloqueio atômico de slot. | `quadra_id`, `data`, `horario`, `nome_cliente`, `whatsapp_cliente`, `esporte` |
 
 ---

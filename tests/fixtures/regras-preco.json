@@ -1,0 +1,62 @@
+{
+  "spec": "SPEC/2026-11-27-precos-fonte-unica.md",
+  "percentualSinal": 0.4,
+  "valorHora": [
+    { "horario": "08:00", "valor": 70 },
+    { "horario": "11:00", "valor": 70 },
+    { "horario": "12:00", "valor": 90 },
+    { "horario": "17:00", "valor": 90 },
+    { "horario": "18:00", "valor": 110 },
+    { "horario": "21:00", "valor": 110 }
+  ],
+  "horariosInvalidos": ["07:00", "22:00", "8:00", "18:30", "", "١٨:00"],
+  "reservas": [
+    {
+      "descricao": "uma hora de manha",
+      "horarios": ["09:00"],
+      "valorTotal": 70,
+      "valorSinal": 28,
+      "valorPendente": 42
+    },
+    {
+      "descricao": "conferido contra criar_reserva_agente (19h)",
+      "horarios": ["19:00"],
+      "valorTotal": 110,
+      "valorSinal": 44,
+      "valorPendente": 66
+    },
+    {
+      "descricao": "atravessa manha e tarde",
+      "horarios": ["11:00", "12:00", "13:00"],
+      "valorTotal": 250,
+      "valorSinal": 100,
+      "valorPendente": 150
+    },
+    {
+      "descricao": "atravessa tarde e noite",
+      "horarios": ["17:00", "18:00", "19:00"],
+      "valorTotal": 310,
+      "valorSinal": 124,
+      "valorPendente": 186
+    },
+    {
+      "descricao": "tres horas de tarde",
+      "horarios": ["14:00", "15:00", "16:00"],
+      "valorTotal": 270,
+      "valorSinal": 108,
+      "valorPendente": 162
+    },
+    {
+      "descricao": "sem horarios",
+      "horarios": [],
+      "valorTotal": 0,
+      "valorSinal": 0,
+      "valorPendente": 0
+    }
+  ],
+  "arredondamento": [
+    { "valorTotal": 33.33, "valorSinal": 13.33, "valorPendente": 20 },
+    { "valorTotal": 99.99, "valorSinal": 40, "valorPendente": 59.99 },
+    { "valorTotal": 12.5, "valorSinal": 5, "valorPendente": 7.5 }
+  ]
+}

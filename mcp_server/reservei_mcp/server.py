@@ -15,11 +15,21 @@ import re
 import sys
 import uuid
 import time
+from datetime import date, datetime, timezone
 from typing import Optional, Dict, Any, List, Mapping, Tuple
 from pathlib import Path
 import requests
 from dotenv import load_dotenv
 from fastmcp import FastMCP
+
+from reservei_mcp.precos import (
+    PRECO_MANHA,
+    PRECO_NOITE,
+    PRECO_TARDE,
+    calcular_pendente,
+    calcular_sinal,
+    calcular_valor_total,
+)
 
 # Garante saída UTF-8 no console/stdio (evita charmap error no Windows)
 if hasattr(sys.stdout, "reconfigure"):
@@ -122,9 +132,27 @@ HORARIOS_DISPONIVEIS = [
 ]
 
 ESPORTES_PERMITIDOS = ["Futsal", "Vôlei", "Basquete", "Handebol", "Outro"]
-VALOR_HORA = 90.0
 
-# Armazenamento em memória (fallback caso o Supabase esteja temporariamente indisponível)
+LEGENDA_PRECOS = (
+    f"manhã R$ {PRECO_MANHA}/h (08h-11h) | tarde R$ {PRECO_TARDE}/h (12h-17h) | "
+    f"noite R$ {PRECO_NOITE}/h (18h-21h) | sinal de 40% para garantir"
+)
+
+# Erros da função criar_reserva_agente do banco, traduzidos para o usuário.
+# Spec: SPEC/2026-11-27-precos-fonte-unica.md
+MENSAGENS_ERRO_RESERVA = {
+    "horario_ocupado": "Este horário já está reservado nesta quadra. Consulte outro horário ou quadra.",
+    "horarios_nao_consecutivos": "Os horários de uma reserva precisam ser consecutivos.",
+    "horario_invalido": "Horário fora da grade de funcionamento (blocos de 1h das 08:00 às 21:00).",
+    "usuario_bloqueado": "Este WhatsApp está bloqueado para novas reservas. Fale com o complexo.",
+    "dados_invalidos": (
+        "Dados inválidos: confira se a data não está no passado, se o nome tem ao menos "
+        "2 letras e se o WhatsApp tem DDD (10 ou 11 dígitos)."
+    ),
+}
+MENSAGEM_ERRO_GENERICA = "Houve uma falha inesperada ao gravar a reserva no banco de dados."
+
+# Armazenamento em memória (modo local, sem Supabase configurado)
 _LOCAL_FALLBACK_RESERVAS: List[Dict[str, Any]] = []
 
 # ─── Helpers de Comunicação com o Supabase ────────────────────────────────────
@@ -168,62 +196,117 @@ def extrair_apenas_digitos(texto: str) -> str:
     return "".join(re.findall(r"\d+", texto or ""))
 
 
-def listar_reservas_supabase(data_filtro: Optional[str] = None) -> List[Dict[str, Any]]:
+def normalizar_data_iso(texto: str) -> str:
     """
-    Consulta reservas registradas na API PostgREST do Supabase com fallback local resiliente.
-    
+    Prepara um timestamp do PostgREST para ``datetime.fromisoformat`` no Python 3.10.
+
+    O Postgres corta os zeros finais dos microssegundos (``.12345``) e pode usar ``Z``;
+    até o 3.10, ``fromisoformat`` só aceita frações com 3 ou 6 dígitos e não aceita ``Z``.
+    """
+    texto = texto.replace("Z", "+00:00")
+    return re.sub(r"\.([0-9]{1,6})(?=[+-]|$)", lambda m: "." + m.group(1).ljust(6, "0"), texto)
+
+
+def reserva_ocupa_horario(reserva: Dict[str, Any], agora: Optional[datetime] = None) -> bool:
+    """
+    Indica se a reserva ocupa os seus horários na grade.
+
+    Reserva cancelada não ocupa. Reserva provisória (``em_processamento``) com
+    ``expira_em`` vencido também não, como em ``reservaOcupaHorario`` do site.
+    """
+    status = reserva.get("status")
+    if status == "cancelada":
+        return False
+    expira_em = reserva.get("expira_em")
+    if status != "em_processamento" or not expira_em:
+        return True
+    try:
+        limite = datetime.fromisoformat(normalizar_data_iso(str(expira_em)))
+    except ValueError:
+        return True
+    if limite.tzinfo is None:
+        limite = limite.replace(tzinfo=timezone.utc)
+    return limite > (agora or datetime.now(timezone.utc))
+
+
+def listar_reservas_supabase(data_filtro: Optional[str] = None) -> Optional[List[Dict[str, Any]]]:
+    """
+    Lista as reservas que ocupam horário, pela visão ``reservas_publicas`` (sem dados pessoais).
+
+    Com a RLS, a chave pública não lê a tabela ``reservas``. Sem Supabase configurado,
+    usa as reservas guardadas em memória.
+
     Args:
         data_filtro: Data opcional no formato 'AAAA-MM-DD' para restringir a busca.
-        
+
     Returns:
-        Lista de dicionários contendo os dados das reservas ativas.
+        A lista de reservas, ou ``None`` se o Supabase está configurado e a consulta falhou
+        (nesse caso a agenda é desconhecida e não pode ser mostrada como livre).
     """
     if not SUPABASE_URL or not SUPABASE_KEY:
-        return [r for r in _LOCAL_FALLBACK_RESERVAS if not data_filtro or r.get("data") == data_filtro]
+        return [
+            r for r in _LOCAL_FALLBACK_RESERVAS
+            if (not data_filtro or r.get("data") == data_filtro) and reserva_ocupa_horario(r)
+        ]
 
-    url = f"{SUPABASE_URL}/rest/v1/reservas?select=*&status=neq.cancelada"
+    url = f"{SUPABASE_URL}/rest/v1/reservas_publicas?select=*&status=neq.cancelada"
     if data_filtro:
         url += f"&data=eq.{data_filtro}"
 
     try:
         resp = requests.get(url, headers=get_supabase_headers(), timeout=5)
         if resp.status_code == 200:
-            return resp.json()
+            return [r for r in resp.json() if reserva_ocupa_horario(r)]
+        print(f"[Aviso MCP] Consulta ao Supabase recusada: {resp.status_code}", file=sys.stderr)
     except Exception as err:
-        print(f"[Aviso MCP] Falha na consulta ao Supabase ({err}). Utilizando armazenamento local.", file=sys.stderr)
+        print(f"[Aviso MCP] Falha na consulta ao Supabase ({err}).", file=sys.stderr)
+    return None
 
-    return [r for r in _LOCAL_FALLBACK_RESERVAS if not data_filtro or r.get("data") == data_filtro]
 
-
-def salvar_reserva_supabase(reserva: Dict[str, Any]) -> bool:
-    """
-    Insere uma nova reserva no banco Supabase com persistência concorrente no cache local.
-    
-    Args:
-        reserva: Dicionário formatado de acordo com o esquema da tabela 'reservas'.
-        
-    Returns:
-        True se a reserva foi gravada no Supabase (ou em memória, quando o Supabase
-        não está configurado); False se o Supabase está configurado e a gravação falhou.
-    """
-    _LOCAL_FALLBACK_RESERVAS.append(reserva)
-
-    if not SUPABASE_URL or not SUPABASE_KEY:
-        return True
-
-    url = f"{SUPABASE_URL}/rest/v1/reservas"
+def traduzir_erro_reserva_agente(resp: Any) -> str:
+    """Converte a resposta de erro do PostgREST em uma mensagem clara para o usuário."""
     try:
-        resp = requests.post(url, headers=get_supabase_headers(), json=reserva, timeout=5)
-        if resp.status_code in (200, 201):
-            return True
-        print(f"[Aviso MCP] Erro ao gravar reserva no Supabase: {resp.status_code} - {resp.text}", file=sys.stderr)
+        codigo = resp.json().get("message", "")
+    except (ValueError, AttributeError):
+        codigo = ""
+    return MENSAGENS_ERRO_RESERVA.get(codigo, MENSAGEM_ERRO_GENERICA)
+
+
+def criar_reserva_supabase(
+    quadra_id: str, data: str, horarios: List[str], nome: str, whatsapp: str, esporte: str
+) -> Tuple[Optional[str], Optional[str]]:
+    """
+    Cria a reserva pela função ``criar_reserva_agente`` do banco.
+
+    O banco valida os dados, calcula o preço (mesmas faixas do site, sinal de 40%),
+    grava como ``pendente`` e devolve o id.
+
+    Returns:
+        ``(id_da_reserva, None)`` em caso de sucesso ou ``(None, mensagem_de_erro)``.
+    """
+    url = f"{SUPABASE_URL}/rest/v1/rpc/criar_reserva_agente"
+    parametros = {
+        "p_quadra_id": quadra_id,
+        "p_data": data,
+        "p_horarios": horarios,
+        "p_nome": nome,
+        "p_whatsapp": whatsapp,
+        "p_esporte": esporte,
+    }
+    try:
+        resp = requests.post(url, headers=get_supabase_headers(), json=parametros, timeout=5)
     except Exception as err:
         print(f"[Aviso MCP] Falha de rede ao gravar no Supabase: {err}", file=sys.stderr)
+        return None, MENSAGEM_ERRO_GENERICA
 
-    # Com o Supabase configurado, falha de gravação é falha da operação: a reserva
-    # não existe na agenda real e o agente não pode informar sucesso ao usuário.
-    _LOCAL_FALLBACK_RESERVAS.remove(reserva)
-    return False
+    if resp.status_code == 200:
+        try:
+            return str(resp.json()), None
+        except ValueError:
+            print(f"[Aviso MCP] Resposta de sucesso sem JSON: {resp.text}", file=sys.stderr)
+            return None, MENSAGEM_ERRO_GENERICA
+    print(f"[Aviso MCP] Reserva recusada pelo Supabase: {resp.status_code} - {resp.text}", file=sys.stderr)
+    return None, traduzir_erro_reserva_agente(resp)
 
 # ─── Inicialização do Servidor FastMCP ────────────────────────────────────────
 
@@ -254,6 +337,11 @@ def consultar_disponibilidade(data: str, quadra_id: Optional[str] = None) -> str
         quadras_alvo = [normalizado]
 
     reservas = listar_reservas_supabase(data_filtro=data)
+    if reservas is None:
+        return (
+            "Erro: Não foi possível consultar a agenda do complexo agora. "
+            "Tente novamente em instantes."
+        )
 
     ocupados_por_quadra: Dict[str, Dict[str, str]] = {q: {} for q in quadras_alvo}
     for r in reservas:
@@ -270,7 +358,8 @@ def consultar_disponibilidade(data: str, quadra_id: Optional[str] = None) -> str
     linhas = [
         "📅 Disponibilidade do Complexo Esportivo Reservei",
         f"Data consultada: {data}",
-        f"Funcionamento: 08:00 às 22:00 (slots de 1h | R$ {VALOR_HORA:.2f}/h)",
+        "Funcionamento: 08:00 às 22:00 (slots de 1h)",
+        f"Preços: {LEGENDA_PRECOS}",
         "────────────────────────────────────────────────────────────",
     ]
 
@@ -301,61 +390,20 @@ def consultar_disponibilidade(data: str, quadra_id: Optional[str] = None) -> str
 
 @mcp.tool
 def buscar_reservas_cliente(telefone_ou_whatsapp: str) -> str:
-    """Busca o histórico e as próximas reservas de um cliente no complexo Reservei pelo número de telefone ou WhatsApp.
+    """Orienta o cliente a consultar as próprias reservas no site do Reservei.
 
-    Retorna todas as reservas localizadas, contendo quadra, data, horários, esporte praticado, valor e status.
-    Use quando o usuário solicitar para ver seus agendamentos, confirmar uma reserva existente ou verificar histórico.
+    A consulta por telefone foi desativada: com a chave pública, ela exporia as reservas de
+    qualquer pessoa. O cliente vê o histórico e as próximas reservas em "Minha Conta", no site.
 
     Args:
-        telefone_ou_whatsapp: Número de contato do cliente com ou sem DDD/máscara (ex.: '(91) 98888-7777' ou '91988887777').
+        telefone_ou_whatsapp: Número de contato do cliente (não é usado para consultar o banco).
     """
-    digitos_busca = extrair_apenas_digitos(telefone_ou_whatsapp)
-    if len(digitos_busca) < 8:
-        return "Erro: Forneça um número de telefone com pelo menos 8 dígitos para realizar a busca."
-
-    todas_reservas = listar_reservas_supabase()
-    encontradas = []
-
-    for r in todas_reservas:
-        tel_res = extrair_apenas_digitos(r.get("whatsapp_cliente") or r.get("telefone_cliente") or "")
-        if len(tel_res) >= 8 and (digitos_busca in tel_res or tel_res in digitos_busca):
-            encontradas.append(r)
-
-    if not encontradas:
-        return f"Nenhuma reserva encontrada para o número informado ('{telefone_ou_whatsapp}')."
-
-    linhas = [
-        f"📋 Reservas encontradas para o cliente ({len(encontradas)} registro(s)):",
-        "────────────────────────────────────────────────────────────",
-    ]
-
-    for idx, r in enumerate(encontradas, 1):
-        q_id = r.get("quadra_id") or "q1"
-        quadra_nome = QUADRAS.get(q_id, {}).get("nome", q_id)
-        data = r.get("data", "Data não informada")
-        horarios = r.get("horarios", [])
-        if isinstance(horarios, list):
-            horarios_str = ", ".join(horarios)
-        else:
-            horarios_str = str(horarios)
-
-        nome = r.get("nome_cliente", "Cliente")
-        esporte = r.get("esporte", "Não especificado")
-        status = r.get("status", "confirmada")
-        reserva_id = r.get("id", "N/A")
-        valor = float(r.get("valor_total") or VALOR_HORA)
-
-        linhas.append(
-            f"{idx}. ID: {reserva_id}\n"
-            f"   • Cliente: {nome}\n"
-            f"   • Quadra: {quadra_nome}\n"
-            f"   • Data: {data}\n"
-            f"   • Horário: {horarios_str} ({r.get('hora_inicio', '')} às {r.get('hora_fim', '')})\n"
-            f"   • Modalidade: {esporte}\n"
-            f"   • Valor: R$ {valor:.2f} | Status: {status.upper()}"
-        )
-
-    return "\n".join(linhas)
+    # Spec: SPEC/2026-11-27-precos-fonte-unica.md (consulta autenticada no BACKLOG.md)
+    return (
+        "🔒 Por segurança, as reservas não são consultadas pelo número de telefone.\n"
+        "O cliente vê o histórico e as próximas reservas no site do Reservei, em \"Minha Conta\", "
+        "entrando com o próprio WhatsApp e senha."
+    )
 
 # ─── Tool 3: Criar Reserva (Escrita — Requer Permissão 'ask') ──────────────────
 
@@ -389,6 +437,13 @@ def criar_reserva(
 
     if not re.match(r"^\d{4}-\d{2}-\d{2}$", data.strip()):
         return f"Erro: Data inválida ('{data}'). O formato deve ser AAAA-MM-DD."
+    # Mesmas recusas do banco, antes de pedir a aprovação humana da reserva.
+    try:
+        data_reserva = datetime.strptime(data.strip(), "%Y-%m-%d").date()
+    except ValueError:
+        return f"Erro: A data '{data}' não existe no calendário."
+    if data_reserva < date.today():
+        return f"Erro: A data '{data}' já passou. Escolha hoje ou um dia futuro."
 
     h_limpo = horario.strip()
     if re.match(r"^\d{1,2}$", h_limpo):
@@ -406,11 +461,12 @@ def criar_reserva(
         return "Erro: O nome do cliente é obrigatório para registrar a reserva."
 
     digitos_tel = extrair_apenas_digitos(whatsapp_cliente)
-    if len(digitos_tel) < 8:
-        return "Erro: O número de WhatsApp/telefone informado é inválido (deve ter no mínimo 8 dígitos)."
+    if len(digitos_tel) < 10:
+        return "Erro: Informe o WhatsApp com DDD (10 ou 11 dígitos, ex.: '91988887777')."
 
-    # Prevenção rigorosa de Double Booking
-    reservas_existentes = listar_reservas_supabase(data_filtro=data)
+    # Prevenção de Double Booking. Se a agenda não puder ser lida, o banco decide
+    # (a função criar_reserva_agente recusa horário ocupado com 'horario_ocupado').
+    reservas_existentes = listar_reservas_supabase(data_filtro=data) or []
     for r in reservas_existentes:
         q_existente = r.get("quadra_id") or r.get("quadraId")
         if q_existente == q_canonico:
@@ -418,53 +474,52 @@ def criar_reserva(
             if isinstance(h_ocupados, str):
                 h_ocupados = [h.strip() for h in re.findall(r"\d{2}:\d{2}", h_ocupados)]
             if h_limpo in h_ocupados:
-                nome_ocupante = r.get("nome_cliente") or "Outro cliente"
                 return (
                     f"Conflito de Horário (Double Booking): A {QUADRAS[q_canonico]['nome']} "
-                    f"já está reservada no dia {data} às {h_limpo} por {nome_ocupante}. "
+                    f"já está reservada no dia {data} às {h_limpo}. "
                     f"A reserva NÃO foi criada. Por favor, consulte outro horário ou quadra."
                 )
 
     hora_int = int(h_limpo.split(":")[0])
     hora_fim = f"{hora_int + 1:02d}:00"
-    reserva_id = f"res_mcp_{uuid.uuid4().hex[:8]}_{int(time.time())}"
 
     esporte_formatado = esporte.strip().capitalize()
     if esporte_formatado not in ESPORTES_PERMITIDOS:
         esporte_formatado = "Outro"
 
-    valor_total = VALOR_HORA
-    valor_sinal = round(valor_total * 0.5, 2)
-    valor_pendente = round(valor_total - valor_sinal, 2)
+    # Valores para exibição; com Supabase, quem grava o preço é o banco (mesmas regras).
+    valor_total = calcular_valor_total([h_limpo])
+    valor_sinal = calcular_sinal(valor_total)
+    valor_pendente = calcular_pendente(valor_total)
 
-    nova_reserva = {
-        "id": reserva_id,
-        "quadra_id": q_canonico,
-        "nome_cliente": nome_cliente.strip(),
-        "whatsapp_cliente": whatsapp_cliente.strip(),
-        "telefone_cliente": whatsapp_cliente.strip(),
-        "cpf_cliente": "",
-        "data": data.strip(),
-        "horarios": [h_limpo],
-        "hora_inicio": h_limpo,
-        "hora_fim": hora_fim,
-        "valor_total": valor_total,
-        "valor_sinal": valor_sinal,
-        "valor_pendente": valor_pendente,
-        "status": "confirmada",
-        "status_whatsapp": "nao_enviado",
-        "esporte": esporte_formatado,
-        "observacoes": "Reserva criada via Servidor MCP Reservei Oficial",
-        "metodo_pagamento": "pix",
-    }
-
-    sucesso = salvar_reserva_supabase(nova_reserva)
-    if not sucesso:
-        return "Erro: Houve uma falha inesperada ao tentar persistir a reserva no banco de dados."
+    if SUPABASE_URL and SUPABASE_KEY:
+        reserva_id, erro = criar_reserva_supabase(
+            q_canonico, data.strip(), [h_limpo], nome_cliente.strip(), digitos_tel, esporte_formatado
+        )
+        if erro:
+            return f"Erro: {erro} A reserva NÃO foi criada."
+    else:
+        reserva_id = f"res_mcp_{uuid.uuid4().hex[:8]}_{int(time.time())}"
+        _LOCAL_FALLBACK_RESERVAS.append({
+            "id": reserva_id,
+            "quadra_id": q_canonico,
+            "nome_cliente": nome_cliente.strip(),
+            "whatsapp_cliente": digitos_tel,
+            "data": data.strip(),
+            "horarios": [h_limpo],
+            "hora_inicio": h_limpo,
+            "hora_fim": hora_fim,
+            "valor_total": valor_total,
+            "valor_sinal": valor_sinal,
+            "valor_pendente": valor_pendente,
+            "status": "pendente",
+            "esporte": esporte_formatado,
+            "observacoes": "Reserva criada pelo agente (MCP) em modo local, sinal a confirmar",
+        })
 
     quadra_info = QUADRAS[q_canonico]
     return (
-        f"🎉 Reserva confirmada com sucesso no Reservei!\n"
+        f"🎉 Reserva registrada no Reservei!\n"
         f"────────────────────────────────────────────────────────────\n"
         f"• Código da Reserva: {reserva_id}\n"
         f"• Quadra: {quadra_info['nome']} ({quadra_info['descricao']})\n"
@@ -473,10 +528,11 @@ def criar_reserva(
         f"• Modalidade: {esporte_formatado}\n"
         f"• Responsável: {nome_cliente.strip()}\n"
         f"• WhatsApp: {whatsapp_cliente.strip()}\n"
-        f"• Valor Total: R$ {valor_total:.2f} (Sinal mínimo: R$ {valor_sinal:.2f})\n"
-        f"• Status: CONFIRMADA\n"
+        f"• Valor Total: R$ {valor_total:.2f} (sinal de 40%: R$ {valor_sinal:.2f} | "
+        f"no local: R$ {valor_pendente:.2f})\n"
+        f"• Status: PENDENTE (sinal de 40% a confirmar)\n"
         f"────────────────────────────────────────────────────────────\n"
-        f"O slot {h_limpo} na {quadra_info['nome']} está agora bloqueado e garantido na agenda."
+        f"O slot {h_limpo} na {quadra_info['nome']} fica reservado enquanto o complexo confirma o sinal."
     )
 
 # ─── Ponto de Entrada ─────────────────────────────────────────────────────────

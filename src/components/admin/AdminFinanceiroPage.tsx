@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { toast } from "sonner";
 import {
   CircleDollarSign,
   TrendingUp,
@@ -15,10 +16,19 @@ import {
   CheckCircle2,
   AlertCircle,
   Sparkles,
+  Download,
 } from "lucide-react";
 
 import { useReservasService } from "@/hooks/useReservasService";
-import { formatarMoeda, formatarDataExibicao } from "@/lib/constants";
+import { formatarMoeda, formatarDataExibicao, getHoje } from "@/lib/constants";
+import {
+  calcularResumoFinanceiro,
+  filtrarReservasFinanceiras,
+  gerarCsvReservas,
+  nomeArquivoCsvFinanceiro,
+  valorBrutoReserva,
+} from "@/lib/financeiro/calculosFinanceiros";
+import { baixarArquivoTexto } from "@/lib/navegador/baixarArquivo";
 import { getTelefonesCadastradosLocal } from "@/lib/supabase/authService";
 import type { Reserva } from "@/store/useReservasStore";
 
@@ -37,15 +47,18 @@ function formatarDiaMes(data: string) {
  * e saldos pendentes no balcão.
  */
 export function AdminFinanceiroPage() {
-  const { reservas, financeiro } = useReservasService();
+  const { reservas } = useReservasService();
   const [filtroTipo, setFiltroTipo] = useState<"todas" | "fidelidade" | "gratis" | "pix" | "recorrentes">("todas");
   const [buscaTexto, setBuscaTexto] = useState("");
 
+  // Sem canceladas, provisórias e bloqueios (SPEC/2026-11-27-financeiro-correto-e-csv.md)
+  const reservasValidas = useMemo(() => filtrarReservasFinanceiras(reservas), [reservas]);
+  const financeiro = useMemo(() => calcularResumoFinanceiro(reservas), [reservas]);
+
   // Métricas agregadas de Fidelidade
   const metricasFidelidade = useMemo(() => {
-    const reservasComFidelidade = reservas.filter(
+    const reservasComFidelidade = reservasValidas.filter(
       (r) =>
-        r.status !== "cancelada" &&
         ((r.descontoFidelidade && r.descontoFidelidade > 0) ||
           r.reservaGratuitaFidelidade ||
           (r.vouchersUtilizados && r.vouchersUtilizados.length > 0))
@@ -72,7 +85,7 @@ export function AdminFinanceiroPage() {
       totalVouchersAplicados,
       reservasTotalmenteGratuitas,
     };
-  }, [reservas]);
+  }, [reservasValidas]);
 
   // Evolução dos últimos 7 dias
   const dadosUltimosDias = useMemo(() => {
@@ -90,42 +103,17 @@ export function AdminFinanceiroPage() {
     });
 
     return dias.map((data) => {
-      const reservasDoDia = reservas.filter(
-        (reserva) => reserva.data === data && reserva.status !== "cancelada"
-      );
-
-      const recebido = reservasDoDia.reduce(
-        (total, reserva) => total + (Number(reserva.valorSinal) || 0),
-        0
-      );
-
-      const previsto = reservasDoDia.reduce(
-        (total, reserva) => total + (Number(reserva.valorTotal) || 0),
-        0
-      );
-
-      const descontoFidelidade = reservasDoDia.reduce(
-        (total, reserva) => total + (Number(reserva.descontoFidelidade) || 0),
-        0
-      );
-
-      const bruto = reservasDoDia.reduce((total, reserva) => {
-        const orig =
-          reserva.valorOriginal !== undefined && !isNaN(Number(reserva.valorOriginal)) && Number(reserva.valorOriginal) > 0
-            ? Number(reserva.valorOriginal)
-            : (Number(reserva.valorTotal) || 0) + (Number(reserva.descontoFidelidade) || 0);
-        return total + (isNaN(orig) ? 0 : orig);
-      }, 0);
+      const resumoDoDia = calcularResumoFinanceiro(reservasValidas.filter((reserva) => reserva.data === data));
 
       return {
         data,
-        recebido,
-        previsto,
-        descontoFidelidade,
-        bruto,
+        recebido: resumoDoDia.recebido,
+        previsto: resumoDoDia.previsto,
+        descontoFidelidade: resumoDoDia.descontosFidelidade,
+        bruto: resumoDoDia.brutoTabela,
       };
     });
-  }, [reservas]);
+  }, [reservasValidas]);
 
   const maiorValor = Math.max(
     ...dadosUltimosDias.map((dia) => dia.bruto || dia.previsto),
@@ -136,31 +124,22 @@ export function AdminFinanceiroPage() {
   const reservasPorQuadra = useMemo(() => {
     const resultado: Record<string, { liquido: number; bruto: number; desconto: number }> = {};
 
-    reservas
-      .filter((reserva) => reserva.status !== "cancelada")
-      .forEach((reserva) => {
-        const desc = Number(reserva.descontoFidelidade) || 0;
-        const bruto =
-          reserva.valorOriginal !== undefined && !isNaN(Number(reserva.valorOriginal)) && Number(reserva.valorOriginal) > 0
-            ? Number(reserva.valorOriginal)
-            : (Number(reserva.valorTotal) || 0) + desc;
+    reservasValidas.forEach((reserva) => {
+      if (!resultado[reserva.quadraId]) {
+        resultado[reserva.quadraId] = { liquido: 0, bruto: 0, desconto: 0 };
+      }
 
-        if (!resultado[reserva.quadraId]) {
-          resultado[reserva.quadraId] = { liquido: 0, bruto: 0, desconto: 0 };
-        }
-
-        resultado[reserva.quadraId].liquido += Number(reserva.valorTotal) || 0;
-        resultado[reserva.quadraId].bruto += isNaN(bruto) ? 0 : bruto;
-        resultado[reserva.quadraId].desconto += desc;
-      });
+      resultado[reserva.quadraId].liquido += Number(reserva.valorTotal) || 0;
+      resultado[reserva.quadraId].bruto += valorBrutoReserva(reserva);
+      resultado[reserva.quadraId].desconto += Number(reserva.descontoFidelidade) || 0;
+    });
 
     return Object.entries(resultado).sort((a, b) => b[1].bruto - a[1].bruto);
-  }, [reservas]);
+  }, [reservasValidas]);
 
   // Lista filtrada para auditoria
   const reservasFiltradas = useMemo(() => {
-    return reservas
-      .filter((r) => r.status !== "cancelada")
+    return reservasValidas
       .filter((r) => {
         const isRecorrente = Boolean(
           r.contratoId ||
@@ -195,12 +174,26 @@ export function AdminFinanceiroPage() {
         return nome.includes(q) || tel.includes(q) || vouchers.includes(q) || r.id.toLowerCase().includes(q);
       })
       .sort((a, b) => b.data.localeCompare(a.data) || b.horaInicio.localeCompare(a.horaInicio));
-  }, [reservas, filtroTipo, buscaTexto]);
+  }, [reservasValidas, filtroTipo, buscaTexto]);
+
+  /** Exporta exatamente a lista que está na tela (filtro de tipo + busca). */
+  const exportarCsv = () => {
+    try {
+      baixarArquivoTexto(
+        nomeArquivoCsvFinanceiro(getHoje()),
+        gerarCsvReservas(reservasFiltradas),
+        "text/csv;charset=utf-8"
+      );
+    } catch (erro) {
+      console.error("[Financeiro] Falha ao exportar CSV:", erro);
+      toast.error("Não foi possível exportar o CSV. Tente novamente ou use outro navegador.");
+    }
+  };
 
   const cardsKpi = [
     {
       titulo: "Total Arrecadado Líquido",
-      valor: financeiro.totalConfirmado,
+      valor: financeiro.recebido,
       descricao: "Recebido em dinheiro / Pix confirmado",
       icon: CircleDollarSign,
       cor: "emerald",
@@ -208,7 +201,7 @@ export function AdminFinanceiroPage() {
     },
     {
       titulo: "Faturamento Bruto em Quadras",
-      valor: financeiro.totalBrutoQuadras,
+      valor: financeiro.brutoTabela,
       descricao: "Valor integral de tabela dos horários",
       icon: TrendingUp,
       cor: "sky",
@@ -216,7 +209,7 @@ export function AdminFinanceiroPage() {
     },
     {
       titulo: "Abatimentos por Fidelidade",
-      valor: financeiro.totalDescontoFidelidade,
+      valor: financeiro.descontosFidelidade,
       descricao: `${metricasFidelidade.qtdReservasComFidelidade} reservas com voucher (${metricasFidelidade.reservasTotalmenteGratuitas} gratuitas)`,
       icon: Gift,
       cor: "purple",
@@ -224,7 +217,7 @@ export function AdminFinanceiroPage() {
     },
     {
       titulo: "Saldo Pendente no Balcão",
-      valor: financeiro.pendenteSinalConfirmado,
+      valor: financeiro.aReceberNoLocal,
       descricao: "A receber presencialmente na entrada",
       icon: Clock,
       cor: "amber",
@@ -434,6 +427,21 @@ export function AdminFinanceiroPage() {
                 className="pl-9 pr-3 py-1.5 text-xs bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 w-full sm:w-56"
               />
             </div>
+
+            <button
+              type="button"
+              onClick={exportarCsv}
+              disabled={reservasFiltradas.length === 0}
+              title={
+                reservasFiltradas.length === 0
+                  ? "Nenhuma reserva na lista para exportar"
+                  : "Exportar a lista filtrada em CSV (Excel)"
+              }
+              className="flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl border border-emerald-500/40 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <Download className="w-3.5 h-3.5" />
+              Exportar CSV
+            </button>
 
             {/* Abas de filtro */}
             <div className="flex bg-slate-800 p-1 rounded-xl border border-slate-700">

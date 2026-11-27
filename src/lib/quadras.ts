@@ -61,9 +61,6 @@ export const QUADRAS: Quadra[] = [
   { id: "q3", numero: 3, descricao: "Quadra poliesportiva coberta" },
 ];
 
-/** Valor padrão por hora (igual para todas as quadras) */
-export const VALOR_HORA = 90; // em reais
-
 // ─── Horários ─────────────────────────────────────────────────────────────────
 
 /** Horários disponíveis para agendamento (blocos de 1 hora) */

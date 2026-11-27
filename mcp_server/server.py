@@ -23,7 +23,6 @@ from reservei_mcp.server import (
     QUADRAS,
     HORARIOS_DISPONIVEIS,
     ESPORTES_PERMITIDOS,
-    VALOR_HORA,
 )
 
 if __name__ == "__main__":

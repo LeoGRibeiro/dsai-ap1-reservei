@@ -6,6 +6,7 @@ sem depender de configurações externas.
 """
 
 import sys
+from datetime import date, timedelta
 from pathlib import Path
 
 # Garante saída UTF-8 no console/stdio
@@ -37,7 +38,7 @@ def main():
     print("=" * 70)
 
     # 1. Consulta de disponibilidade
-    data_teste = "2026-11-12"
+    data_teste = (date.today() + timedelta(days=1)).isoformat()
     print(f"\n[Passo 1] Agente chama a ferramenta de leitura (allow):")
     print(f"👉 consultar_disponibilidade(data='{data_teste}', quadra_id='q1')\n")
     resultado_disp = consultar_disponibilidade(data_teste, "q1")
@@ -75,13 +76,13 @@ def main():
 
     # 4. Verificação das reservas do cliente
     print("\n" + "=" * 70)
-    print(f"[Passo 4] Agente consulta as reservas do cliente após o agendamento:")
+    print(f"[Passo 4] Agente pede as reservas do cliente (a ferramenta orienta a usar o site):")
     print(f"👉 buscar_reservas_cliente(telefone_ou_whatsapp='91988887777')\n")
     resultado_busca = buscar_reservas_cliente("91988887777")
     print(resultado_busca)
 
     print("\n" + "=" * 70)
-    print("✅ Todas as 3 ferramentas foram testadas e validadas com sucesso!")
+    print("✅ Demonstração das 3 ferramentas concluída.")
     print("=" * 70)
 
 

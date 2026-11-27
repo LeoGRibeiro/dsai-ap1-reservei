@@ -19,6 +19,8 @@ import {
 } from "lucide-react";
 import { useReservasService } from "@/hooks/useReservasService";
 import { getTelefonesCadastradosLocal } from "@/lib/supabase/authService";
+import { calcularResumoFinanceiro, calcularTaxaOcupacao } from "@/lib/financeiro/calculosFinanceiros";
+import { HORARIOS_DISPONIVEIS, QUADRAS } from "@/lib/quadras";
 
 function formatarMoeda(valor: number) {
   return valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -64,35 +66,13 @@ export function AdminDashboardPage() {
   }, [reservasHoje]);
 
   const kpis = useMemo(() => {
-    const sinaisPagos = reservasHoje.filter(
-      (r) => r.status === "confirmada" || r.status === "pendente"
-    );
-
-    const totalSinaisRecebidos = sinaisPagos.reduce(
-      (acc, r) => acc + r.valorSinal,
-      0
-    );
-
-    const totalPendenteNoLocal = reservasHoje
-      .filter((r) => r.status === "pendente")
-      .reduce((acc, r) => acc + r.valorPendente, 0);
-
-    const totalReservas = reservasHoje.length;
-
-    // Taxa de ocupação das 3 quadras × 15 horários disponíveis
-    const totalSlots = 3 * 15;
-    const slotsOcupados = reservasHoje.reduce(
-      (acc, r) => acc + r.horarios.length,
-      0
-    );
-    const taxaOcupacao =
-      totalSlots > 0 ? Math.round((slotsOcupados / totalSlots) * 100) : 0;
+    const resumo = calcularResumoFinanceiro(reservasHoje);
 
     return {
-      totalReservas,
-      totalSinaisRecebidos,
-      totalPendenteNoLocal,
-      taxaOcupacao,
+      totalReservas: reservasHoje.length,
+      totalSinaisRecebidos: resumo.recebido,
+      totalPendenteNoLocal: resumo.aReceberNoLocal,
+      taxaOcupacao: calcularTaxaOcupacao(reservasHoje, QUADRAS.length, HORARIOS_DISPONIVEIS.length),
     };
   }, [reservasHoje]);
 
