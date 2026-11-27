@@ -19,6 +19,7 @@ export const SPECS_LANDING_PAGE = {
   PROVA_SOCIAL_REDES: "SPEC/2026-10-06-lp-prova-social-redes.md",
   EVENTOS_FIDELIDADE: "SPEC/2026-10-06-lp-eventos-fidelidade.md",
   EVENTOS_TORNEIOS: "SPEC/2026-11-27-eventos-e-torneios.md",
+  AVALIACOES_CLIENTES: "SPEC/2026-11-27-avaliacoes-de-clientes.md",
   SUPORTE_CONTATO: "SPEC/2026-10-06-lp-suporte-contato.md",
 } as const;
 
@@ -93,9 +94,9 @@ export const SECOES_LANDING_PAGE: readonly SecaoLandingPage[] = [
     id: SECAO_IDS.AVALIACOES,
     rotuloMenu: "Avaliações",
     titulo: "O que dizem nossos clientes",
-    subtitulo: "Avaliações reais publicadas no Google.",
+    subtitulo: "Avaliações de quem já jogou no complexo.",
     exibirNoMenu: false,
-    specReferencia: SPECS_LANDING_PAGE.PROVA_SOCIAL_REDES,
+    specReferencia: SPECS_LANDING_PAGE.AVALIACOES_CLIENTES,
   },
   {
     id: SECAO_IDS.INSTAGRAM,
@@ -137,14 +138,6 @@ export const PLACEHOLDERS_SECOES: readonly PlaceholderSecao[] = [
       "Passo a passo de \"Como Funciona\" o acúmulo de pontos",
       "Exemplos de recompensas reais disponíveis",
       "CTA \"Crie sua Conta e Comece a Pontuar\"",
-    ],
-  },
-  {
-    secaoId: SECAO_IDS.AVALIACOES,
-    itensPlanejados: [
-      "Nota geral do Google com estrelas",
-      "Carrossel com os depoimentos mais recentes",
-      "Botão \"Avalie-nos no Google\"",
     ],
   },
   {
