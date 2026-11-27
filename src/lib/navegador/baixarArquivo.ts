@@ -1,6 +1,10 @@
+/** Tempo até liberar a URL do Blob: liberar no mesmo instante do clique cancela o download em alguns navegadores. */
+const ATRASO_LIBERAR_URL_MS = 1000;
+
 /**
  * Dispara no navegador o download de um arquivo de texto gerado na hora.
- * A URL temporária do Blob é liberada logo depois do clique.
+ *
+ * @throws quando o navegador não consegue criar o arquivo (quem chama deve avisar o usuário).
  */
 export function baixarArquivoTexto(nomeArquivo: string, conteudo: string, tipo: string): void {
   const url = URL.createObjectURL(new Blob([conteudo], { type: tipo }));
@@ -12,6 +16,6 @@ export function baixarArquivoTexto(nomeArquivo: string, conteudo: string, tipo: 
     link.click();
   } finally {
     link.remove();
-    URL.revokeObjectURL(url);
+    setTimeout(() => URL.revokeObjectURL(url), ATRASO_LIBERAR_URL_MS);
   }
 }

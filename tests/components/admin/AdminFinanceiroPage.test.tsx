@@ -5,6 +5,7 @@
 import React from "react";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { toast } from "sonner";
 import { AdminFinanceiroPage } from "@/components/admin/AdminFinanceiroPage";
 import { getHoje } from "@/lib/constants";
 import type { Reserva } from "@/store/useReservasStore";
@@ -25,6 +26,8 @@ vi.mock("@/hooks/useReservasService", () => ({
     },
   }),
 }));
+
+vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 vi.mock("@/lib/supabase/authService", () => ({
   getTelefonesCadastradosLocal: () => new Set<string>(),
@@ -91,7 +94,18 @@ describe("AdminFinanceiroPage", () => {
     expect(csv).toContain("Ana Souza");
     expect(csv).not.toContain("Bruno Lima");
     expect(csv).not.toContain("Manutenção");
-    expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:csv");
+  });
+
+  it("avisa o admin quando o navegador não consegue gerar o arquivo", () => {
+    reservasMock = [reserva({ id: "a" })];
+    URL.createObjectURL = vi.fn(() => {
+      throw new Error("bloqueado");
+    });
+    render(<AdminFinanceiroPage />);
+
+    fireEvent.click(screen.getByRole("button", { name: /Exportar CSV/ }));
+
+    expect(toast.error).toHaveBeenCalledWith(expect.stringMatching(/Não foi possível exportar/));
   });
 
   it("desabilita a exportação quando a lista está vazia", () => {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { toast } from "sonner";
 import {
   CircleDollarSign,
   TrendingUp,
@@ -102,31 +103,14 @@ export function AdminFinanceiroPage() {
     });
 
     return dias.map((data) => {
-      const reservasDoDia = reservasValidas.filter((reserva) => reserva.data === data);
-
-      const recebido = reservasDoDia.reduce(
-        (total, reserva) => total + (Number(reserva.valorSinal) || 0),
-        0
-      );
-
-      const previsto = reservasDoDia.reduce(
-        (total, reserva) => total + (Number(reserva.valorTotal) || 0),
-        0
-      );
-
-      const descontoFidelidade = reservasDoDia.reduce(
-        (total, reserva) => total + (Number(reserva.descontoFidelidade) || 0),
-        0
-      );
-
-      const bruto = reservasDoDia.reduce((total, reserva) => total + valorBrutoReserva(reserva), 0);
+      const resumoDoDia = calcularResumoFinanceiro(reservasValidas.filter((reserva) => reserva.data === data));
 
       return {
         data,
-        recebido,
-        previsto,
-        descontoFidelidade,
-        bruto,
+        recebido: resumoDoDia.recebido,
+        previsto: resumoDoDia.previsto,
+        descontoFidelidade: resumoDoDia.descontosFidelidade,
+        bruto: resumoDoDia.brutoTabela,
       };
     });
   }, [reservasValidas]);
@@ -194,11 +178,16 @@ export function AdminFinanceiroPage() {
 
   /** Exporta exatamente a lista que está na tela (filtro de tipo + busca). */
   const exportarCsv = () => {
-    baixarArquivoTexto(
-      nomeArquivoCsvFinanceiro(getHoje()),
-      gerarCsvReservas(reservasFiltradas),
-      "text/csv;charset=utf-8"
-    );
+    try {
+      baixarArquivoTexto(
+        nomeArquivoCsvFinanceiro(getHoje()),
+        gerarCsvReservas(reservasFiltradas),
+        "text/csv;charset=utf-8"
+      );
+    } catch (erro) {
+      console.error("[Financeiro] Falha ao exportar CSV:", erro);
+      toast.error("Não foi possível exportar o CSV. Tente novamente ou use outro navegador.");
+    }
   };
 
   const cardsKpi = [

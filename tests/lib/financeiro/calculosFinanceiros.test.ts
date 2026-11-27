@@ -73,7 +73,8 @@ describe("calcularResumoFinanceiro", () => {
       }),
       reserva({ id: "d", status: "cancelada", valorTotal: 90, valorSinal: 36, valorPendente: 54 }),
       reserva({ id: "e", status: "em_processamento", valorTotal: 90, valorSinal: 36, valorPendente: 54 }),
-      bloqueio,
+      // bloqueio com valores, para o teste falhar se a exclusão de bloqueios sumir
+      { ...bloqueio, valorTotal: 90, valorSinal: 90, valorOriginal: 90, descontoFidelidade: 10 },
     ]);
 
     expect(resumo).toEqual({
